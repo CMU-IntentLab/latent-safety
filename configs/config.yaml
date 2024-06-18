@@ -6,6 +6,8 @@ lx_img_path: /home/kensuke/latent-safety/logs/classifier_img/failure_set_img.pth
 dyn_path: /home/kensuke/latent-safety/logs/dynamics/dynamics.pth
 dyn_img_path: /home/kensuke/latent-safety/logs/dynamics_img/dynamics_img.pth
 enc_img_path: /home/kensuke/latent-safety/logs/dynamics_img/encoder_img.pth
+dyn_img_inv_path: /home/kensuke/latent-safety/logs/dynamics_img_inv/dynamics_img.pth
+enc_img_inv_path: /home/kensuke/latent-safety/logs/dynamics_img_inv/encoder_img.pth
 dyn_img_data: /home/kensuke/latent-safety/datasets/dyn_data.pkl
 lx_img_data: /home/kensuke/latent-safety/datasets/classifier_data.pkl
 

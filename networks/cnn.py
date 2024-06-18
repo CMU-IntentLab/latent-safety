@@ -23,15 +23,107 @@ class ConvEncoderMLP(nn.Module):
         super(ConvEncoderMLP, self).__init__()
         self.in_dim = in_dim
         self.enc = ConvEncoder(input_shape, depth, act, norm, kernel_size, minres)
-        self.mlp = MLP(self.enc.outdim+in_dim, out_dim, hidden_dim, hidden_layer = hidden_layer)
+        self.fc = nn.Linear(self.enc.outdim, hidden_dim)
+        self.mlp = MLP(hidden_dim+in_dim, out_dim, hidden_dim, hidden_layer = hidden_layer)
 
     def forward(self, obs, state=None):
-        enc = self.enc(obs)
+        enc = self.fc(self.enc(obs))
         if self.in_dim != 0:
-            inp = torch.cat([enc, state.unsqueeze(1)], dim=1)
+            if state.dim() == 2:
+                inp = torch.cat([enc, state], dim=1)
+            else:
+                inp = torch.cat([enc, state.unsqueeze(1)], dim=1)
         else:
             inp = enc
         return self.mlp(inp)
+
+class ConvDecoder(nn.Module):
+    def __init__(
+        self,
+        feat_size,
+        shape=(3, 64, 64),
+        depth=32,
+        act=nn.ELU,
+        norm=True,
+        kernel_size=4,
+        minres=4,
+        outscale=1.0,
+        cnn_sigmoid=False,
+    ):
+        super(ConvDecoder, self).__init__()
+        act = getattr(torch.nn, act)
+        self._shape = shape
+        self._cnn_sigmoid = cnn_sigmoid
+        layer_num = int(np.log2(shape[1]) - np.log2(minres))
+        self._minres = minres
+        out_ch = minres**2 * depth * 2 ** (layer_num - 1)
+        self._embed_size = out_ch
+
+        self._linear_layer = nn.Linear(feat_size, out_ch)
+        self._linear_layer.apply(uniform_weight_init(outscale))
+        in_dim = out_ch // (minres**2)
+        out_dim = in_dim // 2
+
+        layers = []
+        h, w = minres, minres
+        for i in range(layer_num):
+            bias = False
+            if i == layer_num - 1:
+                out_dim = self._shape[0]
+                act = False
+                bias = True
+                norm = False
+
+            if i != 0:
+                in_dim = 2 ** (layer_num - (i - 1) - 2) * depth
+            pad_h, outpad_h = self.calc_same_pad(k=kernel_size, s=2, d=1)
+            pad_w, outpad_w = self.calc_same_pad(k=kernel_size, s=2, d=1)
+            layers.append(
+                nn.ConvTranspose2d(
+                    in_dim,
+                    out_dim,
+                    kernel_size,
+                    2,
+                    padding=(pad_h, pad_w),
+                    output_padding=(outpad_h, outpad_w),
+                    bias=bias,
+                )
+            )
+            if norm:
+                layers.append(ImgChLayerNorm(out_dim))
+            if act:
+                layers.append(act())
+            in_dim = out_dim
+            out_dim //= 2
+            h, w = h * 2, w * 2
+        [m.apply(weight_init) for m in layers[:-1]]
+        layers[-1].apply(uniform_weight_init(outscale))
+        self.layers = nn.Sequential(*layers)
+
+    def calc_same_pad(self, k, s, d):
+        val = d * (k - 1) - s + 1
+        pad = math.ceil(val / 2)
+        outpad = pad * 2 - val
+        return pad, outpad
+
+    def forward(self, features, dtype=None):
+        x = self._linear_layer(features)
+        # (batch, time, -1) -> (batch * time, h, w, ch)
+        x = x.reshape(
+            [-1, self._minres, self._minres, self._embed_size // self._minres**2]
+        )
+        # (batch, time, -1) -> (batch * time, ch, h, w)
+        x = x.permute(0, 3, 1, 2)
+        x = self.layers(x)
+        # (batch, time, -1) -> (batch, time, ch, h, w)
+        mean = x.reshape(features.shape[:-1] + self._shape)
+        # (batch, time, ch, h, w) -> (batch, time, h, w, ch)
+        mean = mean.permute(0, 1, 3, 4, 2)
+        if self._cnn_sigmoid:
+            mean = F.sigmoid(mean)
+        else:
+            mean += 0.5
+        return mean
 
 
 class ConvEncoder(nn.Module):
@@ -153,3 +245,32 @@ def weight_init(m):
         m.weight.data.fill_(1.0)
         if hasattr(m.bias, "data"):
             m.bias.data.fill_(0.0)
+
+def uniform_weight_init(given_scale):
+    def f(m):
+        if isinstance(m, nn.Linear):
+            in_num = m.in_features
+            out_num = m.out_features
+            denoms = (in_num + out_num) / 2.0
+            scale = given_scale / denoms
+            limit = np.sqrt(3 * scale)
+            nn.init.uniform_(m.weight.data, a=-limit, b=limit)
+            if hasattr(m.bias, "data"):
+                m.bias.data.fill_(0.0)
+        elif isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
+            space = m.kernel_size[0] * m.kernel_size[1]
+            in_num = space * m.in_channels
+            out_num = space * m.out_channels
+            denoms = (in_num + out_num) / 2.0
+            scale = given_scale / denoms
+            limit = np.sqrt(3 * scale)
+            nn.init.uniform_(m.weight.data, a=-limit, b=limit)
+            if hasattr(m.bias, "data"):
+                m.bias.data.fill_(0.0)
+        elif isinstance(m, nn.LayerNorm):
+            m.weight.data.fill_(1.0)
+            if hasattr(m.bias, "data"):
+                m.bias.data.fill_(0.0)
+
+    return f
+

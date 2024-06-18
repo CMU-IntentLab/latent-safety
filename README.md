@@ -1,5 +1,8 @@
 # latent-safety
 
+# making conda env
+conda create --name latent --file requirements.txt
+
 # generating image-based pickle files:
 conda activate latent
 python scripts/generate_data.py

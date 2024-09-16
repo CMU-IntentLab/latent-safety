@@ -1,32 +1,236 @@
-# num datapts for training encoder, transition, classifier
-num_pts: 5000
+defaults:
 
-lx_path: /home/kensuke/latent-safety/logs/classifier/failure_set.pth
-lx_img_path: /home/kensuke/latent-safety/logs/classifier_img/failure_set_img.pth
-dyn_path: /home/kensuke/latent-safety/logs/dynamics/dynamics.pth
-dyn_img_path: /home/kensuke/latent-safety/logs/dynamics_img/dynamics_img.pth
-enc_img_path: /home/kensuke/latent-safety/logs/dynamics_img/encoder_img.pth
-dyn_img_inv_path: /home/kensuke/latent-safety/logs/dynamics_img_inv/dynamics_img.pth
-enc_img_inv_path: /home/kensuke/latent-safety/logs/dynamics_img_inv/encoder_img.pth
-dyn_img_data: /home/kensuke/latent-safety/datasets/dyn_data.pkl
-lx_img_data: /home/kensuke/latent-safety/datasets/classifier_data.pkl
+  logdir: "logs/dreamer_cont"
+  traindir: null
+  evaldir: null
+  offline_traindir: ''
+  offline_evaldir: ''
+  seed: 0
+  deterministic_run: True
+  steps: 1e6
+  parallel: False
+  eval_every: 500
+  eval_num_seeds: 50
+  eval_per_seed: 1
+  log_every: 50
+  log_every_video: 500
+  reset_every: 0
+  device: 'cuda:0'
+  compile: True
+  precision: 32
+  debug: False
+  video_pred_log: True
+  from_ckpt:  null #/home/kensuke/latent-safety/logs/dreamer_cont/0915/045150/best_pretrain_joint_0_14.pt
+  from_prefill_dir: null
+  obs_step: 2
 
+  # Debug configs:
+  done_mode: 1 # can be 0, 1, 2
+  bc_loss_only: False    # if True, only train with BC-loss
+  ignore_base_policy: False # if True, ignore base policy in residuals
+  augment_images: False
+  seed_in_batches: True
+  validation_mse_trajs: 50
 
-# HJ computation bounds
-x_min: -1.1
-x_max: 1.1
-y_min: -1.1
-y_max: 1.1
-dt: 0.05
-numT: 100
-nx: 101
-ny: 101
-nz: 101
+  # Mixed data pretraining
+  pretrain_on_random: False
+  pretrain_on_random_mixed: False
 
-obs_x: 0
-obs_y: 0
-obs_r: 0.5
+  # Robomimic data
+  exp_name: ''
+  image_size: 64
+  shape_rewards: True
+  shift_rewards: False
+  multi_task_data: False
+  num_exp_trajs: 1900
 
-# Dubins car parameters
-u_max: 1.25
-speed: 1
+  # Pretraining
+  pretrain_bc_loss_only: True
+  pretrain_separately: False
+  pretrain_joint_steps: 40000
+  pretrain_annealing: null
+  pretrain_actor_steps: 0
+  pretrain_loss: 'ce'  # 'mse' or 'ce'
+  pretrain_ema: False
+  ema_decay: 0.999 
+  ema_power: 0.8
+  recon_pretrain: True # If true, pretrain decoder with reconstruction loss
+  dropout_recurrent_prob: 0
+  initial_joint_train_steps: 0  # Number of steps to train model on expert+random data before joint training
+
+  # Hybrid Training
+  hybrid_training: True
+  pretrain_reward_val: null
+  separate_reward_training: True
+
+  # RLPD-esque
+  hybrid_critic_fitting: False  # only hybrid updates on critic
+  critic_ensemble_size: 1       # 1 means no ensemble
+  critic_ensemble_subsample: 2  # number of critics to randomly select
+  critic_reset_every: 0 
+  utd_ratio: 1                  # number of times to update critic per model/agent update
+
+  # Pessimism in model
+  reward_ensemble_size: 1
+  reward_ensemble_subsample: 1
+  cont_ensemble_size: 1
+  cont_ensemble_subsample: 1
+
+  # Batch Training
+  steps_per_batch: 100
+  model_only_scale: 0.0   # additional percentage of steps_per_batch to train only model
+  actor_only_scale: 0.0   # additional percentage of steps_per_batch to train only actor
+  no_joint_steps: False   # if true, don't train joint model/actor
+  mask_recur: False   # Mask out recurrent state
+  dropout_recur_in_residuals: False   # Apply dropout on recurrent state in the residuals
+  freeze_encoder: True    # Freeze both self.encoder and the embedding from RSSM
+
+  # Boosting
+  train_residuals: True
+  ensemble_residuals: False
+  residual_discount: 0.95  # 1.0 implies equal weighting
+  residual_init_zeros: False
+
+  # BC-reg
+  bc_reg: True           # if True, regularize actor learning with BC-loss
+  bc_reg_weight: 1.0      # weight of BC-loss in actor loss
+  bc_reg_wd: 1.0           # weight decay factor for BC-loss (1.0 for no decay)
+
+  # Environment
+  task: 'dubins'
+  size: [64, 64]
+  envs: 1
+  action_repeat: 1
+  time_limit: 100
+  grayscale: False
+  prefill: 5000
+  reward_EMA: True
+
+  # Model
+  dyn_hidden: 512
+  dyn_deter: 512
+  dyn_stoch: 32
+  dyn_discrete: 0 # set as 0 for continuous latent
+  dyn_rec_depth: 1
+  dyn_mean_act: 'none'
+  dyn_std_act: 'sigmoid2'
+  dyn_min_std: 0.1
+  grad_heads: ['decoder', 'reward', 'cont']
+  units: 512
+  act: 'SiLU'
+  norm: True
+  encoder:
+    {mlp_keys: '', cnn_keys: 'image', act: 'SiLU', norm: True, cnn_depth: 32, kernel_size: 4, minres: 4, mlp_layers: 5, mlp_units: 1024, symlog_inputs: True}
+  decoder:
+    {mlp_keys: '', cnn_keys: 'image', act: 'SiLU', norm: True, cnn_depth: 32, kernel_size: 4, minres: 4, mlp_layers: 5, mlp_units: 1024, cnn_sigmoid: False, image_dist: mse, vector_dist: symlog_mse, outscale: 1.0}
+  actor:
+    {layers: 2, dist: 'normal', entropy: 3e-4, unimix_ratio: 0.01, std: 'learned', min_std: 0.1, max_std: 1.0, temp: 0.1, lr: 3e-5, eps: 1e-5, grad_clip: 100.0, outscale: 1.0}
+  critic:
+    {layers: 2, dist: 'symlog_disc', slow_target: True, slow_target_update: 1, slow_target_fraction: 0.02, lr: 3e-5, eps: 1e-5, grad_clip: 100.0, outscale: 0.0}
+  reward_head:
+    {layers: 2, dist: 'symlog_disc', loss_scale: 1.0, outscale: 0.0}
+  cont_head:
+    {layers: 2, loss_scale: 1.0, outscale: 1.0}
+  dyn_scale: 0.5
+  rep_scale: 0.1
+  kl_free: 1.0
+  weight_decay: 0.0
+  unimix_ratio: 0.01
+  initial: 'learned'
+
+  # Training
+  batch_size: 32
+  batch_length: 32
+  train_ratio: 1024
+  pretrain: 100
+  model_lr: 1e-4
+  obs_lr: 1e-3
+  decay_model_lr: false
+  opt_eps: 1e-8
+  grad_clip: 1000
+  dataset_size: 1000000
+  opt: 'adam'
+
+  # Behavior.
+  discount: 0.997
+  discount_lambda: 0.95
+  imag_horizon: 15
+  imag_gradient: 'dynamics'
+  imag_gradient_mix: 0.0
+  eval_state_mean: False
+
+  # Exploration
+  expl_behavior: 'greedy'
+  expl_until: 0
+  expl_extr_scale: 0.0
+  expl_intr_scale: 1.0
+  disag_target: 'stoch'
+  disag_log: True
+  disag_models: 10
+  disag_offset: 1
+  disag_layers: 4
+  disag_units: 400
+  disag_action_cond: False
+
+  doneType: toEnd
+  costType: sparse
+  randomSeed: 0
+  consRadius: 0.5
+  targetRadius: 0.5
+  turnRadius:  0.8 #1/1.25
+  speed: 1
+  warmup: true
+  warmupIter: 500
+  maxUpdates: 400000
+  updateTimes: 20
+  memoryCapacity: 10000
+  checkPeriod: 10000
+
+  annealing: null
+  architecture: [100, 100]
+  learningRate: 1e-3
+  gamma: 0.9999
+  actType: Tanh
+  mode: RA
+  terminalType: g
+  showTime: null
+  name: 'world_model_biased_ac'
+  outFolder: logs/experiments
+  plotFigure: null
+  storeFigure: True
+  learnedMargin: null
+  learnedDyn: null
+  image: null
+  wm: True
+  # num datapts for training encoder, transition, classifier
+  num_pts: 5000
+  num_actions: 3
+
+  #lx_path: /home/kensuke/latent-safety/logs/classifier/failure_set.pth
+  #lx_img_path: /home/kensuke/latent-safety/logs/classifier_img/failure_set_img.pth
+  #dyn_path: /home/kensuke/latent-safety/logs/dynamics/dynamics.pth
+  #dyn_img_path: /home/kensuke/latent-safety/logs/dynamics_img/dynamics_img.pth
+  #enc_img_path: /home/kensuke/latent-safety/logs/dynamics_img/encoder_img.pth
+  #dyn_img_inv_path: /home/kensuke/latent-safety/logs/dynamics_img_inv/dynamics_img.pth
+  #enc_img_inv_path: /home/kensuke/latent-safety/logs/dynamics_img_inv/encoder_img.pth
+  #dyn_img_data: /home/kensuke/latent-safety/datasets/dyn_data.pkl
+  #lx_img_data: /home/kensuke/latent-safety/datasets/classifier_data.pkl
+  lx_ckpt: /home/kensuke/latent-safety/logs/dreamer_cont/0915/045150/best_classifier_0_05.pt
+  grid_path: /home/kensuke/latent-safety/logs/grid/LS_BRT_v1_w1.25.npy
+  # HJ computation bounds
+  x_min: -1.1
+  x_max: 1.1
+  y_min: -1.1
+  y_max: 1.1
+  dt: 0.05
+  numT: 25
+  nx: 101
+  ny: 101
+  nz: 101
+
+  obs_x: 0
+  obs_y: 0
+  obs_r: 0.5
+
+  # Dubins car parameters
+  u_max: 1.25

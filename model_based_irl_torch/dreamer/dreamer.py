@@ -24,6 +24,7 @@ class Dreamer(nn.Module):
         self, obs_space, act_space, config, logger, dataset, expert_dataset=None
     ):
         super(Dreamer, self).__init__()
+        self.dpi = config.size[0]
         self._config = config
         self._logger = logger
         self._should_log = tools.Every(config.log_every)
@@ -424,7 +425,7 @@ class Dreamer(nn.Module):
         states = np.expand_dims(np.expand_dims(thetas,1),1)
         imgs = np.expand_dims(imgs, 1)
         dummy_acs = np.zeros((np.shape(xs)[0], 1, 3))
-        rand_idx = np.random.randint(0, 3, np.shape(xs)[0])
+        rand_idx = 1 #np.random.randint(0, 3, np.shape(xs)[0])
         dummy_acs[np.arange(np.shape(xs)[0]), :, rand_idx] = 1
         firsts = np.ones((np.shape(xs)[0], 1))
         lasts = np.zeros((np.shape(xs)[0], 1))
@@ -458,7 +459,7 @@ class Dreamer(nn.Module):
         # Add the circle patch to the axis
         dt = 0.05
         v = 1
-        dpi=64
+        dpi=self.dpi
         ax.add_patch(circle)
         
         plt.quiver(state[0], state[1], dt*v*np.cos(state[2]), dt*v*np.sin(state[2]), angles='xy', scale_units='xy', minlength=0,width=0.05, scale=0.2,color=(0,0,1), zorder=3)
@@ -499,6 +500,8 @@ class Dreamer(nn.Module):
                 labels.append(1) # unsafe
             else:
                 labels.append(0) # safe
+            x = x - np.cos(theta)*1*0.05
+            y = y - np.sin(theta)*1*0.05
             imgs.append(self.capture_image(np.array([x, y, theta])))
             idxs.append(idx)        
             it.iternext()
@@ -509,13 +512,22 @@ class Dreamer(nn.Module):
         y_lin = ys[idxs[:,1]]
         theta_lin = thetas[idxs[:,2]]
         
-        g_x, _, _ = self.get_latent(x_lin, y_lin, theta_lin, imgs, obs_mlp)
+        g_x = []
+        ## all of this is because I can't do a forward pass with 128x128 images in one go
+        num_c = 5
+        chunk = int(np.shape(x_lin)[0]/num_c)
+        for k in range(num_c):
+            g_xlist, _, _ = self.get_latent(x_lin[k*chunk:(k+1)*chunk], y_lin[k*chunk:(k+1)*chunk], theta_lin[k*chunk:(k+1)*chunk], imgs[k*chunk:(k+1)*chunk], obs_mlp)
+            g_x = g_x + g_xlist.tolist()
+        g_x = np.array(g_x)
         v[idxs[:, 0], idxs[:, 1], idxs[:, 2]] = g_x
 
-        tp = np.where(g_x[safe_idxs] > 0)
-        fn = np.where(g_x[safe_idxs] <= 0)
-        fp = np.where(g_x[unsafe_idxs] > 0)
-        tn = np.where(g_x[unsafe_idxs] <= 0)
+        #g_x, _, _ = self.get_latent(x_lin, y_lin, theta_lin, imgs, obs_mlp)
+        #v[idxs[:, 0], idxs[:, 1], idxs[:, 2]] = g_x
+        tp  = np.where(g_x[safe_idxs] > 0)
+        fn  = np.where(g_x[safe_idxs] <= 0)
+        fp  = np.where(g_x[unsafe_idxs] > 0)
+        tn  = np.where(g_x[unsafe_idxs] <= 0)
         
         vmax = round(max(np.max(v), 0),1)
         vmin = round(min(np.min(v), -vmax),1)
@@ -581,37 +593,36 @@ class Dreamer(nn.Module):
         data = wm.preprocess(data)
         R = 0.5
         with tools.RequiresGrad(lx_mlp):
-            if eval:
-                lx_mlp.eval()
-
-            with torch.cuda.amp.autocast(wm._use_amp):
-                embed = self._wm.encoder(data)
-                post, prior = wm.dynamics.observe(embed, data["action"], data["is_first"])
-                feat = self._wm.dynamics.get_feat(post).detach() 
-                
-                x, y, theta = data["privileged_state"][:,:,0], data["privileged_state"][:,:,1], data["privileged_state"][:,:, 2]
-
-                safety_data = (x**2 + y**2) - R**2
-                safe_data = torch.where(safety_data > 0)
-                unsafe_data = torch.where(safety_data <= 0)
-
-                safe_dataset = feat[safe_data]
-                unsafe_dataset = feat[unsafe_data]
-
-                pos = lx_mlp(safe_dataset)
-                neg = lx_mlp(unsafe_dataset)
-                
-                
-                gamma = 0.75
-                lx_loss = (1/pos.size(0))*torch.sum(torch.relu(gamma - pos)) #penalizes safe for being positive
-                lx_loss +=  (1/neg.size(0))*torch.sum(torch.relu(gamma + neg)) # penalizes unsafe for being negative
-                
-                lx_loss = lx_loss
             if not eval:
-                lx_opt(torch.mean(lx_loss), lx_mlp.parameters())
-                plot_arr = None
-                score = 0
+                with torch.cuda.amp.autocast(wm._use_amp):
+                    embed = self._wm.encoder(data)
+                    post, prior = wm.dynamics.observe(embed, data["action"], data["is_first"])
+                    feat = self._wm.dynamics.get_feat(post).detach() 
+                    
+                    x, y, theta = data["privileged_state"][:,:,0], data["privileged_state"][:,:,1], data["privileged_state"][:,:, 2]
+
+                    safety_data = (x**2 + y**2) - R**2
+                    safe_data = torch.where(safety_data > 0)
+                    unsafe_data = torch.where(safety_data <= 0)
+
+                    safe_dataset = feat[safe_data]
+                    unsafe_dataset = feat[unsafe_data]
+
+                    pos = lx_mlp(safe_dataset)
+                    neg = lx_mlp(unsafe_dataset)
+                    
+                    
+                    gamma = 0.75
+                    lx_loss = (1/pos.size(0))*torch.sum(torch.relu(gamma - pos)) #penalizes safe for being positive
+                    lx_loss +=  (1/neg.size(0))*torch.sum(torch.relu(gamma + neg)) # penalizes unsafe for being negative
+                    
+                    lx_loss = lx_loss
+            
+                    lx_opt(torch.mean(lx_loss), lx_mlp.parameters())
+                    plot_arr = None
+                    score = 0
             else:
+                lx_mlp.eval()
                 plot_arr, tp, fn, fp, tn = self.get_eval_plot(lx_mlp, 0)
                 '''safe_pts = data['privileged_state'][safe_data]
                 unsafe_pts = data['privileged_state'][unsafe_data]

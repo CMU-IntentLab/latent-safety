@@ -23,11 +23,10 @@ class ConvEncoderMLP(nn.Module):
         super(ConvEncoderMLP, self).__init__()
         self.in_dim = in_dim
         self.enc = ConvEncoder(input_shape, depth, act, norm, kernel_size, minres)
-        self.fc = nn.Linear(self.enc.outdim, hidden_dim)
-        self.mlp = MLP(hidden_dim+in_dim, out_dim, hidden_dim, hidden_layer = hidden_layer)
+        self.mlp = MLP(self.enc.outdim+in_dim, out_dim, hidden_dim, hidden_layer = hidden_layer)
 
     def forward(self, obs, state=None):
-        enc = self.fc(self.enc(obs))
+        enc = self.enc(obs)
         if self.in_dim != 0:
             if state.dim() == 2:
                 inp = torch.cat([enc, state], dim=1)
@@ -107,6 +106,7 @@ class ConvDecoder(nn.Module):
         return pad, outpad
 
     def forward(self, features, dtype=None):
+        features = features.unsqueeze(1)
         x = self._linear_layer(features)
         # (batch, time, -1) -> (batch * time, h, w, ch)
         x = x.reshape(

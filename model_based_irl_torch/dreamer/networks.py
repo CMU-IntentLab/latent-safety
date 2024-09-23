@@ -381,11 +381,14 @@ class MultiEncoder(nn.Module):
         self.cnn_shapes = {
             k: v for k, v in shapes.items() if len(v) == 3 and re.match(cnn_keys, k)
         }
-        self.mlp_shapes = {
-            k: v
-            for k, v in shapes.items()
-            if len(v) in (1, 2) and re.match(mlp_keys, k)
-        }
+        if mlp_keys == '':
+            self.mlp_shapes = {}
+        else:
+            self.mlp_shapes = {
+                k: v
+                for k, v in shapes.items()
+                if len(v) in (1, 2) and re.match(mlp_keys, k)
+            }
         print("Encoder CNN shapes:", self.cnn_shapes)
         print("Encoder MLP shapes:", self.mlp_shapes)
 
@@ -457,11 +460,14 @@ class MultiDecoder(nn.Module):
         self.cnn_shapes = {
             k: v for k, v in shapes.items() if len(v) == 3 and re.match(cnn_keys, k)
         }
-        self.mlp_shapes = {
-            k: v
-            for k, v in shapes.items()
-            if len(v) in (1, 2) and re.match(mlp_keys, k)
-        }
+        if mlp_keys == '':
+            self.mlp_shapes = {}
+        else:
+            self.mlp_shapes = {
+                k: v
+                for k, v in shapes.items()
+                if len(v) in (1, 2) and re.match(mlp_keys, k)
+            }
         print("Decoder CNN shapes:", self.cnn_shapes)
         print("Decoder MLP shapes:", self.mlp_shapes)
 

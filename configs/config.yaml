@@ -20,9 +20,10 @@ defaults:
   precision: 32
   debug: False
   video_pred_log: True
-  from_ckpt:  null #/home/kensuke/latent-safety/logs/dreamer_cont/0915/045150/best_pretrain_joint_0_14.pt
+  from_ckpt: /home/kensuke/latent-safety/logs/dreamer_cont/0922/030257/best_pretrain_joint_0_36.pt #/home/kensuke/latent-safety/logs/dreamer_cont/0921/151810/best_pretrain_joint_0_33.pt #/home/kensuke/latent-safety/logs/dreamer_cont/0920/102553/best_pretrain_joint_0_18.pt  #/home/kensuke/latent-safety/logs/dreamer_cont/0918/110223/best_pretrain_joint_0_13.pt #/home/kensuke/latent-safety/logs/dreamer_cont/0915/045150/best_pretrain_joint_0_14.pt
+  lx_ckpt: /home/kensuke/latent-safety/logs/dreamer_cont/0922/030257/best_classifier_0_01.pt #/home/kensuke/latent-safety/logs/dreamer_cont/0921/151810/best_classifier_0_01.pt #/home/kensuke/latent-safety/logs/dreamer_cont/0920/150347/best_classifier_0_03.pt #/home/kensuke/latent-safety/logs/dreamer_cont/0918/175717/classifier.pt
   from_prefill_dir: null
-  obs_step: 2
+  obs_step: 1
 
   # Debug configs:
   done_mode: 1 # can be 0, 1, 2
@@ -98,7 +99,7 @@ defaults:
 
   # Environment
   task: 'dubins'
-  size: [64, 64]
+  size: [128, 128]
   envs: 1
   action_repeat: 1
   time_limit: 100
@@ -194,7 +195,7 @@ defaults:
   mode: RA
   terminalType: g
   showTime: null
-  name: 'world_model_biased_ac'
+  name: 'world_model_new'
   outFolder: logs/experiments
   plotFigure: null
   storeFigure: True
@@ -202,6 +203,7 @@ defaults:
   learnedDyn: null
   image: null
   wm: True
+  gt_lx: False
   # num datapts for training encoder, transition, classifier
   num_pts: 5000
   num_actions: 3
@@ -215,7 +217,6 @@ defaults:
   #enc_img_inv_path: /home/kensuke/latent-safety/logs/dynamics_img_inv/encoder_img.pth
   #dyn_img_data: /home/kensuke/latent-safety/datasets/dyn_data.pkl
   #lx_img_data: /home/kensuke/latent-safety/datasets/classifier_data.pkl
-  lx_ckpt: /home/kensuke/latent-safety/logs/dreamer_cont/0915/045150/best_classifier_0_05.pt
   grid_path: /home/kensuke/latent-safety/logs/grid/LS_BRT_v1_w1.25.npy
   # HJ computation bounds
   x_min: -1.1
@@ -224,9 +225,9 @@ defaults:
   y_max: 1.1
   dt: 0.05
   numT: 25
-  nx: 101
-  ny: 101
-  nz: 101
+  nx: 51
+  ny: 51
+  nz: 51
 
   obs_x: 0
   obs_y: 0

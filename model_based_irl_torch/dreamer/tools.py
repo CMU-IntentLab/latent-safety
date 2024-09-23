@@ -296,7 +296,7 @@ def fill_expert_dataset(config, cache, is_val_set=False):
     return obj_size
 
 def fill_expert_dataset_dubins(config, cache, is_val_set=False):
-    dataset_path = '/home/kensuke/latent-safety/datasets/demos.pkl'
+    dataset_path = '/home/kensuke/latent-safety/datasets/demos128.pkl'
     #dataset_path = '/home/kensuke/latent-safety/datasets/biased_demos.pkl'
     with open(dataset_path, 'rb') as f:
         demos = pickle.load(f)

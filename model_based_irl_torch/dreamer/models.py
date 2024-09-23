@@ -41,9 +41,7 @@ class WorldModel(nn.Module):
         self._use_amp = True if config.precision == 16 else False
         self._config = config
         shapes = {k: tuple(v.shape) for k, v in obs_space.spaces.items()}
-        ''' TEMPORARY '''
-        shapes.pop('obs_state')
-        shapes.pop('state')
+
         self._init_model(shapes, config)
         self._init_heads(shapes, config)
         self._init_optims(config)

@@ -277,7 +277,7 @@ def train_eval(config):
         train_loss = []
         eval_loss = []
         for i in range(recon_steps):
-            if i % 500 == 0:
+            if i % 250 == 0:
                 print('eval')
                 new_loss, eval_plot = agent.train_lx(
                     next(obs_eval_dataset), lx_mlp, lx_opt, eval=True

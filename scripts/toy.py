@@ -36,7 +36,7 @@ import math
 
 config_path = '/home/kensuke/latent-safety/configs/config.yaml'
 with open(config_path, 'r') as file:
-    config = yaml.safe_load(file)
+    config = yaml.safe_load(file)['defaults']
 num_pts = config['num_pts']
 x_min = config['x_min']
 x_max = config['x_max']
@@ -54,10 +54,10 @@ nz = config['nz']
 
 
 # Third scenario with Reach-Avoid set
-g = Grid(np.array([x_min, y_min, -math.pi]), np.array([x_max, y_max, math.pi]), 3, np.array([nx, ny, nz]), [2])
+g = Grid(np.array([x_min, y_min, 0]), np.array([x_max, y_max, 2*math.pi]), 3, np.array([nx, ny, nz]), [2])
 
 
-goal = learnedShape(g, path=config['classifier_path'])
+goal = CylinderShape(g, [2], [0, 0, 0], 0.5)
 
 lookback_length = config['numT']*config['dt'] 
 t_step = 0.05

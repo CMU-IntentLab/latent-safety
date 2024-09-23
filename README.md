@@ -3,6 +3,11 @@
 # making conda env
 conda create --name latent --file requirements.txt
 
+# training WM + Classifier
+python scripts/train_wm.py
+
+
+## EVERYTHING BELOW IS OLD
 # generating image-based pickle files:
 conda activate latent
 python scripts/generate_data.py

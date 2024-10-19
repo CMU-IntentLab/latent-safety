@@ -42,7 +42,9 @@ import omni.isaac.lab_tasks  # noqa: F401
 from omni.isaac.lab_tasks.manager_based.manipulation.lift import mdp
 from omni.isaac.lab_tasks.utils.data_collector import RobomimicDataCollector
 from omni.isaac.lab_tasks.utils.parse_cfg import parse_env_cfg
-
+from omni.isaac.lab.envs.ui import ViewportCameraController
+from omni.isaac.lab.envs import ViewerCfg
+import time
 
 def pre_process_actions(delta_pose: torch.Tensor, gripper_command: bool) -> torch.Tensor:
     """Pre-process actions for the environment."""
@@ -71,14 +73,15 @@ def main():
     # until goal is reached
     env_cfg.terminations.time_out = None
     # set the resampling time range to large number to avoid resampling
-    env_cfg.commands.object_pose.resampling_time_range = (1.0e9, 1.0e9)
+    #env_cfg.commands.object_pose.resampling_time_range = (1.0e9, 1.0e9)
     # we want to have the terms in the observations returned as a dictionary
     # rather than a concatenated tensor
     env_cfg.observations.policy.concatenate_terms = False
 
     # add termination condition for reaching the goal otherwise the environment won't reset
-    env_cfg.terminations.object_reached_goal = DoneTerm(func=mdp.object_reached_goal)
+    #env_cfg.terminations.object_reached_goal = DoneTerm(func=mdp.object_reached_goal)
 
+    env_cfg.terminations.time_out = DoneTerm(func=mdp.time_out, time_out=True)
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg)
 
@@ -86,7 +89,7 @@ def main():
     if args_cli.teleop_device.lower() == "keyboard":
         teleop_interface = Se3Keyboard(pos_sensitivity=0.04, rot_sensitivity=0.08)
     elif args_cli.teleop_device.lower() == "spacemouse":
-        teleop_interface = Se3SpaceMouse(pos_sensitivity=0.05, rot_sensitivity=0.005)
+        teleop_interface = Se3SpaceMouse(pos_sensitivity=0.15, rot_sensitivity=0.01)
     else:
         raise ValueError(f"Invalid device interface '{args_cli.teleop_device}'. Supported: 'keyboard', 'spacemouse'.")
     # add teleoperation key for env reset
@@ -116,7 +119,11 @@ def main():
     # reset interfaces
     teleop_interface.reset()
     collector_interface.reset()
-
+    
+    view_cfg = ViewerCfg()
+    view_ctrl = ViewportCameraController(env, view_cfg)
+    view_ctrl.set_view_env_index(0)
+    view_ctrl.update_view_to_asset_root('robot')
     # simulate environment -- run everything in inference mode
     with contextlib.suppress(KeyboardInterrupt) and torch.inference_mode():
         while not collector_interface.is_stopped():
@@ -127,12 +134,19 @@ def main():
             # compute actions based on environment
             actions = pre_process_actions(delta_pose, gripper_command)
 
+            print(actions)
             # TODO: Deal with the case when reset is triggered by teleoperation device.
             #   The observations need to be recollected.
             # store signals before stepping
             # -- obs
-            for key, value in obs_dict["policy"].items():
-                collector_interface.add(f"obs/{key}", value)
+            print(obs_dict['failure'])
+            for key in obs_dict.keys():
+                if isinstance(obs_dict[key], dict):
+                    for key, value in obs_dict[key].items():
+                        collector_interface.add(f"obs/{key}", value)
+                else:
+                    collector_interface.add(f"obs/{key}", obs_dict[key])
+
             # -- actions
             collector_interface.add("actions", actions)
 
@@ -146,15 +160,22 @@ def main():
             # robomimic only cares about policy observations
             # store signals from the environment
             # -- next_obs
-            for key, value in obs_dict["policy"].items():
-                collector_interface.add(f"next_obs/{key}", value)
+            #for key, value in obs_dict["policy"].items():
+            #    collector_interface.add(f"next_obs/{key}", value)
+
+            for key in obs_dict.keys():
+                if isinstance(obs_dict[key], dict):
+                    for key, value in obs_dict[key].items():
+                        collector_interface.add(f"next_obs/{key}", value)
+                else:
+                    collector_interface.add(f"next_obs/{key}", obs_dict[key])
             # -- rewards
             collector_interface.add("rewards", rewards)
             # -- dones
             collector_interface.add("dones", dones)
 
             # -- is success label
-            collector_interface.add("success", env.termination_manager.get_term("object_reached_goal"))
+            #collector_interface.add("success", env.termination_manager.get_term("object_reached_goal"))
 
             # flush data from collector for successful environments
             reset_env_ids = dones.nonzero(as_tuple=False).squeeze(-1)

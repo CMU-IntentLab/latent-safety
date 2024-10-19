@@ -70,7 +70,11 @@ gym.register(
     entry_point="omni.isaac.lab.envs:ManagerBasedRLEnv",
     kwargs={
         "env_cfg_entry_point": ik_rel_env_cfg.FrankaCubeLiftEnvCfg,
-        "robomimic_bc_cfg_entry_point": os.path.join(agents.__path__[0], "robomimic/bc.json"),
+        #"robomimic_bc_cfg_entry_point": os.path.join(agents.__path__[0], "robomimic/bc.json",),
+        #"rsl_rl_cfg_entry_point": agents.rsl_rl_cfg.LiftCubePPORunnerCfg,
+        #"skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+        #"rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_ppo_cfg.yaml",
+        #"sb3_cfg_entry_point": f"{agents.__name__}:sb3_ppo_cfg.yaml",
     },
     disable_env_checker=True,
 )

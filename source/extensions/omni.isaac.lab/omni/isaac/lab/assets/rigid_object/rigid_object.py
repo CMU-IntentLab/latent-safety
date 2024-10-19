@@ -20,6 +20,11 @@ import omni.isaac.lab.utils.string as string_utils
 from ..asset_base import AssetBase
 from .rigid_object_data import RigidObjectData
 
+
+import uuid
+import datetime
+import random 
+
 if TYPE_CHECKING:
     from .rigid_object_cfg import RigidObjectCfg
 
@@ -202,6 +207,21 @@ class RigidObject(AssetBase):
         # set into simulation
         self.root_physx_view.set_velocities(self._data.root_state_w[:, 7:], indices=physx_env_ids)
 
+    def write_ID_to_sim(self, env_ids: Sequence[int] | None = None):
+        """Set the root velocity over selected environment indices into the simulation.
+
+        Args:
+            root_velocity: Root velocities in simulation frame. Shape is (len(env_ids), 6).
+            env_ids: Environment indices. If None, then all indices are used.
+        """
+        # resolve all indices
+        if env_ids is None:
+            env_ids = slice(None)
+        #self._data.root_state_w[env_ids, 7:] = root_velocity.clone()
+        for id in env_ids:
+            timestamp = datetime.datetime.now().strftime("%H%M%S")
+            string = str(timestamp) + f"{random.randint(1, 1000000000):09}"
+            self._data.ID[id] = int(string) #f"{timestamp}-{str(uuid.uuid4().hex)}"
     """
     Operations - Setters.
     """

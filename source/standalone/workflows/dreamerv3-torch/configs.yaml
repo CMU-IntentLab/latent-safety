@@ -1,0 +1,232 @@
+defaults:
+
+  policy_mode: 'sac' #sac or ddpg
+  buffer_sac: 0.1 # the level set to take safety of when using sac
+  buffer_ddpg: 0.8 # the level set to take safety of when using ddpg
+  epo: 50 # checkpoint to load 
+
+
+
+  logdir: 'test_wrist_20hz_2cam1env_newrew_128_200exp_fail_test'
+  traindir: null
+  evaldir: null
+  offline_traindir: ''
+  offline_evaldir: ''
+  seed: 0
+  deterministic_run: False
+  steps: 1e6
+  parallel: False
+  eval_every: 1e4
+  eval_episode_num: 20
+  log_every: 1e4
+  reset_every: 0
+  device: 'cuda:0'
+  compile: True
+  precision: 32
+  debug: False
+  video_pred_log: True
+
+  # Environment
+  task: 'dmc_walker_walk'
+  size: [128, 128]
+  envs: 1
+  action_repeat: 1
+  time_limit: 1000
+  grayscale: False
+  prefill: 2500
+  reward_EMA: True
+
+  # Model
+  dyn_hidden: 512
+  dyn_deter: 512
+  dyn_stoch: 32
+  dyn_discrete: 32
+  dyn_rec_depth: 1
+  dyn_mean_act: 'none'
+  dyn_std_act: 'sigmoid2'
+  dyn_min_std: 0.1
+  grad_heads: ['decoder', 'reward', 'cont', 'failure']
+  units: 512
+  act: 'SiLU'
+  norm: True
+  encoder:
+    {mlp_keys: 'policy', cnn_keys: '.*\_cam$', act: 'SiLU', norm: True, cnn_depth: 32, kernel_size: 4, minres: 4, mlp_layers: 5, mlp_units: 1024, symlog_inputs: True}
+  decoder:
+    {mlp_keys: 'policy', cnn_keys:  '.*\_cam$', act: 'SiLU', norm: True, cnn_depth: 32, kernel_size: 4, minres: 4, mlp_layers: 5, mlp_units: 1024, cnn_sigmoid: False, image_dist: mse, vector_dist: symlog_mse, outscale: 1.0}
+  actor:
+    {layers: 2, dist: 'normal', entropy: 3e-4, unimix_ratio: 0.01, std: 'learned', min_std: 0.1, max_std: 1.0, temp: 0.1, lr: 3e-5, eps: 1e-5, grad_clip: 100.0, outscale: 1.0}
+  critic:
+    {layers: 2, dist: 'symlog_disc', slow_target: True, slow_target_update: 1, slow_target_fraction: 0.02, lr: 3e-5, eps: 1e-5, grad_clip: 100.0, outscale: 0.0}
+  reward_head:
+    {layers: 2, dist: 'symlog_disc', loss_scale: 1.0, outscale: 0.0}
+  cont_head:
+    {layers: 2, loss_scale: 1.0, outscale: 1.0}
+  dyn_scale: 0.5
+  rep_scale: 0.1
+  kl_free: 1.0
+  weight_decay: 0.0
+  unimix_ratio: 0.01
+  initial: 'learned'
+
+  hybrid_training: True
+  num_exp_trajs: -1 
+  # Training
+  batch_size: 16
+  batch_length: 64
+  train_ratio: 512
+  pretrain: 100
+  model_lr: 1e-4
+  opt_eps: 1e-8
+  grad_clip: 1000
+  dataset_size: 1000000
+  opt: 'adam'
+
+  # Behavior.
+  discount: 0.997
+  discount_lambda: 0.95
+  imag_horizon: 15
+  imag_gradient: 'dynamics'
+  imag_gradient_mix: 0.0
+  eval_state_mean: False
+
+  # Exploration
+  expl_behavior: 'greedy'
+  expl_until: 0
+  expl_extr_scale: 0.0
+  expl_intr_scale: 1.0
+  disag_target: 'stoch'
+  disag_log: True
+  disag_models: 10
+  disag_offset: 1
+  disag_layers: 4
+  disag_units: 400
+  disag_action_cond: False
+
+
+  # LCRL
+  task_lcrl: franka_wm-v0 # ra_droneracing_Game-v6, ra_highway_Game-v2, ra_1d_Game-v0
+  reward-threshold: null 
+  #seed: 0 
+  buffer-size: 40000 
+  actor-lr: 1e-4
+  critic-lr: 1e-3
+  gamma_lcrl: 0.95 # type=float, default=0.95)
+  tau: 0.005 # type=float, default=0.005)
+  exploration-noise: 0.1 # type=float, default=0.1)
+  epoch: 10 # type=int, default=10)
+  total-episodes: 60 # type=int, default=160)
+  step-per-epoch: 40000 # type=int, default=40000)
+  step-per-collect: 8 # type=int, default=8)
+  update-per-step: 0.125 # type=float, default=0.125)
+  batch_size_lcrl: 512 # type=int, default=512)
+  control-net: [512, 512, 512, 512] # type=int, nargs='*', default=None) # for control policy
+  disturbance-net: [ 512, 512, 512, 512] #type=int, nargs='*', default=None) # for disturbance policy
+  critic-net: [512, 512, 512, 512] # type=int, nargs='*', default=None) # for critic net
+  training-num: 1 # type=int, default=8)
+  test-num: 50 # type=int, default=100)
+  render: 0. # type=float, default=0.)
+  rew-norm: False # action="store_true", default=False)
+  n-step: 1 # type=int, default=1)
+  continue-training-logdir: null # type=str, default=None)
+  continue-training-epoch: null # type=int, default=None)
+  actor-gradient-steps: 1 # type=int, default=1)
+  is-game-baseline: False # type=bool, default=False) # it will be set automatically
+  target-update-freq: 400 # type=int, default=400)
+  auto-alpha: 1
+  alpha-lr: 3e-4
+  alpha: 0.2 
+
+  actor-activation: 'ReLU' #type=str, default='ReLU')
+  critic-activation: 'ReLU' # type=str, default='ReLU')
+  kwargs: {} # type=str, default='{}')
+  warm-start-path: null # type=str, default=None) # e.g., log/ra_droneracing_Game-v6/epoch_id_10/policy.pth
+
+dmc_proprio:
+  steps: 5e5
+  action_repeat: 2
+  envs: 4
+  train_ratio: 512
+  video_pred_log: false
+  encoder: {mlp_keys: '.*', cnn_keys: '$^'}
+  decoder: {mlp_keys: '.*', cnn_keys: '$^'}
+
+dmc_vision:
+  steps: 1e6
+  action_repeat: 2
+  envs: 4
+  train_ratio: 512
+  video_pred_log: true
+  encoder: {mlp_keys: '$^', cnn_keys: 'image'}
+  decoder: {mlp_keys: '$^', cnn_keys: 'image'}
+
+crafter:
+  task: crafter_reward
+  step: 1e6
+  action_repeat: 1
+  envs: 1
+  train_ratio: 512
+  video_pred_log: true
+  dyn_hidden: 1024
+  dyn_deter: 4096
+  units: 1024
+  encoder: {mlp_keys: '$^', cnn_keys: 'image', cnn_depth: 96, mlp_layers: 5, mlp_units: 1024}
+  decoder: {mlp_keys: '$^', cnn_keys: 'image', cnn_depth: 96, mlp_layers: 5, mlp_units: 1024}
+  actor: {layers: 5, dist: 'onehot', std: 'none'}
+  value: {layers: 5}
+  reward_head: {layers: 5}
+  cont_head: {layers: 5}
+  imag_gradient: 'reinforce'
+
+atari100k:
+  steps: 4e5
+  envs: 1
+  action_repeat: 4
+  train_ratio: 1024
+  video_pred_log: true
+  eval_episode_num: 100
+  actor: {dist: 'onehot', std: 'none'}
+  imag_gradient: 'reinforce'
+  stickey: False
+  lives: unused
+  noops: 30
+  resize: opencv
+  actions: needed
+  time_limit: 108000
+
+minecraft:
+  task: minecraft_diamond
+  step: 1e8
+  parallel: True
+  envs: 16
+  # no eval
+  eval_episode_num: 0
+  eval_every: 1e4
+  action_repeat: 1
+  train_ratio: 16
+  video_pred_log: true
+  dyn_hidden: 1024
+  dyn_deter: 4096
+  units: 1024
+  encoder: {mlp_keys: 'inventory|inventory_max|equipped|health|hunger|breath|obs_reward', cnn_keys: 'image', cnn_depth: 96, mlp_layers: 5, mlp_units: 1024}
+  decoder: {mlp_keys: 'inventory|inventory_max|equipped|health|hunger|breath', cnn_keys: 'image', cnn_depth: 96, mlp_layers: 5, mlp_units: 1024}
+  actor: {layers: 5, dist: 'onehot', std: 'none'}
+  value: {layers: 5}
+  reward_head: {layers: 5}
+  cont_head: {layers: 5}
+  imag_gradient: 'reinforce'
+  break_speed: 100.0
+  time_limit: 36000
+
+memorymaze:
+  steps: 1e8
+  action_repeat: 2
+  actor: {dist: 'onehot', std: 'none'}
+  imag_gradient: 'reinforce'
+  task: 'memorymaze_9x9'
+
+debug:
+  debug: True
+  pretrain: 1
+  prefill: 1
+  batch_size: 10
+  batch_length: 20

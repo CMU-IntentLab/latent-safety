@@ -6,7 +6,7 @@
 from dataclasses import MISSING
 
 import omni.isaac.lab.sim as sim_utils
-from omni.isaac.lab.assets import ArticulationCfg, AssetBaseCfg, DeformableObjectCfg, RigidObjectCfg
+from omni.isaac.lab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
 from omni.isaac.lab.envs import ManagerBasedRLEnvCfg
 from omni.isaac.lab.managers import CurriculumTermCfg as CurrTerm
 from omni.isaac.lab.managers import EventTermCfg as EventTerm
@@ -20,6 +20,8 @@ from omni.isaac.lab.sensors.frame_transformer.frame_transformer_cfg import Frame
 from omni.isaac.lab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg, UsdFileCfg
 from omni.isaac.lab.utils import configclass
 from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
+from omni.isaac.lab.sensors import TiledCameraCfg, CameraCfg
+from omni.isaac.lab.envs.mdp.observations import grab_images
 
 from . import mdp
 
@@ -40,7 +42,10 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
     # end-effector sensor: will be populated by agent env cfg
     ee_frame: FrameTransformerCfg = MISSING
     # target object: will be populated by agent env cfg
-    object: RigidObjectCfg | DeformableObjectCfg = MISSING
+    object: RigidObjectCfg = MISSING
+    #camera: TiledCameraCfg = MISSING
+    wrist_cam: CameraCfg | TiledCameraCfg = MISSING
+    front_cam: CameraCfg | TiledCameraCfg = MISSING
 
     # Table
     table = AssetBaseCfg(
@@ -68,20 +73,6 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
 ##
 
 
-@configclass
-class CommandsCfg:
-    """Command terms for the MDP."""
-
-    object_pose = mdp.UniformPoseCommandCfg(
-        asset_name="robot",
-        body_name=MISSING,  # will be set by agent env cfg
-        resampling_time_range=(5.0, 5.0),
-        debug_vis=True,
-        ranges=mdp.UniformPoseCommandCfg.Ranges(
-            pos_x=(0.4, 0.6), pos_y=(-0.25, 0.25), pos_z=(0.25, 0.5), roll=(0.0, 0.0), pitch=(0.0, 0.0), yaw=(0.0, 0.0)
-        ),
-    )
-
 
 @configclass
 class ActionsCfg:
@@ -100,18 +91,45 @@ class ObservationsCfg:
     class PolicyCfg(ObsGroup):
         """Observations for policy group."""
 
-        joint_pos = ObsTerm(func=mdp.joint_pos_rel)
-        joint_vel = ObsTerm(func=mdp.joint_vel_rel)
-        object_position = ObsTerm(func=mdp.object_position_in_robot_root_frame)
-        target_object_position = ObsTerm(func=mdp.generated_commands, params={"command_name": "object_pose"})
-        actions = ObsTerm(func=mdp.last_action)
+        eef_pos = ObsTerm(func=mdp.eef_pos)
+        
+        def __post_init__(self):
+            self.enable_corruption = False
+            self.concatenate_terms = True
+
+    @configclass
+    class EnvIDCfg(ObsGroup):
+        """Observations for policy group."""
+
+        env_id = ObsTerm(func=mdp.object_id)
 
         def __post_init__(self):
-            self.enable_corruption = True
+            self.enable_corruption = False
             self.concatenate_terms = True
+
+    @configclass
+    class FailureCfg(ObsGroup):
+        """Observations for policy group."""
+
+        failure = ObsTerm(func=mdp.object_failures)
+
+        def __post_init__(self):
+            self.enable_corruption = False
+            self.concatenate_terms = True
+   
+    @configclass
+    class ImageCfg(ObsGroup):
+        wrist_cam =  ObsTerm(func=grab_images, params={"sensor_cfg": SceneEntityCfg("wrist_cam"), "data_type": "rgb", "normalize": False}) #ObsTerm(func=mdp.grab_images, params={"camera_name": "wrist_cam"})
+        front_cam =  ObsTerm(func=grab_images, params={"sensor_cfg": SceneEntityCfg("front_cam"), "data_type": "rgb", "normalize": False}) #ObsTerm(func=mdp.grab_images, params={"camera_name": "front_cam"})
+        def __post_init__(self):
+            self.enable_corruption = False
+            self.concatenate_terms = False #True
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
+    env_ids: EnvIDCfg = EnvIDCfg()
+    image: ImageCfg = ImageCfg()
+    failure: FailureCfg = FailureCfg()
 
 
 @configclass
@@ -120,6 +138,30 @@ class EventCfg:
 
     reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
 
+    reset_base_position = EventTerm(
+        func=mdp.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "pose_range": {"x": (-0.0, 0.0), "y": (-0, 0.), "z": (0.0, 0.0)},
+            "velocity_range": {},
+            "asset_cfg": SceneEntityCfg("base"),
+        },
+    )
+    reset_object_position = EventTerm(
+        func=mdp.reset_root_states_uniform,
+        mode="reset",
+        params={
+            "pose_range": {"x": (-0.05, 0.00), "y": (-0.05, 0.05), "z": (-0.0, 0.0)},
+            "velocity_range": {},
+            "asset_cfgs": [SceneEntityCfg("object"), SceneEntityCfg("right"),  SceneEntityCfg("left")],
+        },
+    )
+    
+    new_env_id = EventTerm(
+        func=mdp.reset_env_ids,
+        mode="reset",
+    )
+    '''
     reset_object_position = EventTerm(
         func=mdp.reset_root_state_uniform,
         mode="reset",
@@ -130,33 +172,24 @@ class EventCfg:
         },
     )
 
+    '''
 
 @configclass
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    reaching_object = RewTerm(func=mdp.object_ee_distance, params={"std": 0.1}, weight=1.0)
+    reaching_object = RewTerm(func=mdp.object_ee_distance, params={"std": 0.1}, weight=1.)
 
-    lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 0.04}, weight=15.0)
+    lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 0.2}, weight=20.0)
 
-    object_goal_tracking = RewTerm(
-        func=mdp.object_goal_distance,
-        params={"std": 0.3, "minimal_height": 0.04, "command_name": "object_pose"},
-        weight=16.0,
-    )
-
-    object_goal_tracking_fine_grained = RewTerm(
-        func=mdp.object_goal_distance,
-        params={"std": 0.05, "minimal_height": 0.04, "command_name": "object_pose"},
-        weight=5.0,
-    )
+    #fallen = RewTerm(func=mdp.objects_fallen, params={"object_cfgs": [SceneEntityCfg("left"), SceneEntityCfg("right")]}, weight=0.0)
 
     # action penalty
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-4)
 
     joint_vel = RewTerm(
         func=mdp.joint_vel_l2,
-        weight=-1e-4,
+        weight=-1e-2,
         params={"asset_cfg": SceneEntityCfg("robot")},
     )
 
@@ -181,8 +214,16 @@ class CurriculumCfg:
     )
 
     joint_vel = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -1e-1, "num_steps": 10000}
+        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -2e-1, "num_steps": 100000}
     )
+
+    #fallen = CurrTerm(
+    #    func=mdp.modify_reward_weight, params={"term_name": "fallen", "weight": -20., "num_steps": 120000}
+    #)
+
+    '''joint_acc = CurrTerm(
+        func=mdp.modify_reward_weight, params={"term_name": "joint_acc", "weight": -1e-4, "num_steps": 10000}
+    )'''
 
 
 ##
@@ -195,11 +236,11 @@ class LiftEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the lifting environment."""
 
     # Scene settings
-    scene: ObjectTableSceneCfg = ObjectTableSceneCfg(num_envs=4096, env_spacing=2.5)
+    scene: ObjectTableSceneCfg = ObjectTableSceneCfg(num_envs=4096, env_spacing=4)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
-    commands: CommandsCfg = CommandsCfg()
+    #commands: CommandsCfg = CommandsCfg()
     # MDP settings
     rewards: RewardsCfg = RewardsCfg()
     terminations: TerminationsCfg = TerminationsCfg()
@@ -209,14 +250,15 @@ class LiftEnvCfg(ManagerBasedRLEnvCfg):
     def __post_init__(self):
         """Post initialization."""
         # general settings
-        self.decimation = 2
-        self.episode_length_s = 5.0
+        self.decimation = 5
+        self.episode_length_s = 3
+        self.rerender_on_reset = True
         # simulation settings
         self.sim.dt = 0.01  # 100Hz
-        self.sim.render_interval = self.decimation
+        self.sim.render_interval = 1 #self.decimation
 
         self.sim.physx.bounce_threshold_velocity = 0.2
         self.sim.physx.bounce_threshold_velocity = 0.01
         self.sim.physx.gpu_found_lost_aggregate_pairs_capacity = 1024 * 1024 * 4
-        self.sim.physx.gpu_total_aggregate_pairs_capacity = 16 * 1024
+        self.sim.physx.gpu_total_aggregate_pairs_capacity = 32 * 1024
         self.sim.physx.friction_correlation_distance = 0.00625

@@ -18,6 +18,8 @@ import omni.isaac.lab.utils.math as math_utils
 from omni.isaac.lab.assets import Articulation, RigidObject
 from omni.isaac.lab.managers import SceneEntityCfg
 from omni.isaac.lab.sensors import Camera, RayCaster, RayCasterCamera, TiledCamera
+import numpy as np 
+import matplotlib.pyplot as plt
 
 if TYPE_CHECKING:
     from omni.isaac.lab.envs import ManagerBasedEnv, ManagerBasedRLEnv
@@ -107,6 +109,17 @@ def joint_pos(env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("
     asset: Articulation = env.scene[asset_cfg.name]
     return asset.data.joint_pos[:, asset_cfg.joint_ids]
 
+
+def eef_pos(env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """The joint positions of the asset.
+
+    Note: Only the joints configured in :attr:`asset_cfg.joint_ids` will have their positions returned.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+    idx, name = asset.find_bodies('panda_hand')
+    body_state_w = asset.data.body_state_w[:, idx[0], :7] #xyz+quat
+    return body_state_w
 
 def joint_pos_rel(env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """The joint positions of the asset w.r.t. the default joint positions.

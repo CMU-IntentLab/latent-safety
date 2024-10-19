@@ -24,9 +24,11 @@ parser.add_argument("--sensitivity", type=float, default=1.0, help="Sensitivity 
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
 args_cli = parser.parse_args()
+print(args_cli)
 
 # launch omniverse app
-app_launcher = AppLauncher(headless=args_cli.headless)
+app_launcher = AppLauncher(args_cli)
+#app_launcher = AppLauncher(headless=args_cli.headless)
 simulation_app = app_launcher.app
 
 """Rest everything follows."""
@@ -63,18 +65,24 @@ def pre_process_actions(delta_pose: torch.Tensor, gripper_command: bool) -> torc
 def main():
     """Running keyboard teleoperation with Isaac Lab manipulation environment."""
     # parse configuration
+    #env_cfg = parse_env_cfg(
+    #    args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric
+    #)
+
+
     env_cfg = parse_env_cfg(
-        args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric
+        args_cli.task, device='cuda:0', num_envs=1, use_fabric=True
     )
     # modify configuration
     env_cfg.terminations.time_out = None
-    if "Lift" in args_cli.task:
+    #if "Lift" in args_cli.task:
         # set the resampling time range to large number to avoid resampling
-        env_cfg.commands.object_pose.resampling_time_range = (1.0e9, 1.0e9)
+        #env_cfg.commands.object_pose.resampling_time_range = (1.0e9, 1.0e9)
         # add termination condition for reaching the goal otherwise the environment won't reset
-        env_cfg.terminations.object_reached_goal = DoneTerm(func=mdp.object_reached_goal)
+        #env_cfg.terminations.object_reached_goal = DoneTerm(func=mdp.object_reached_goal)
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg)
+
     # check environment name (for reach , we don't allow the gripper)
     if "Reach" in args_cli.task:
         carb.log_warn(
@@ -88,7 +96,7 @@ def main():
         )
     elif args_cli.teleop_device.lower() == "spacemouse":
         teleop_interface = Se3SpaceMouse(
-            pos_sensitivity=0.05 * args_cli.sensitivity, rot_sensitivity=0.005 * args_cli.sensitivity
+            pos_sensitivity=0.1 * args_cli.sensitivity, rot_sensitivity=0.005 * args_cli.sensitivity
         )
     elif args_cli.teleop_device.lower() == "gamepad":
         teleop_interface = Se3Gamepad(

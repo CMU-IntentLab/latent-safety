@@ -66,6 +66,9 @@ class RigidObjectData:
         self._root_state_w = TimestampedBuffer()
         self._body_acc_w = TimestampedBuffer()
 
+        self.id = torch.zeros((self._root_physx_view.count,), device=self.device, dtype=int)
+
+
     def update(self, dt: float):
         """Updates the data for the rigid object.
 
@@ -106,6 +109,12 @@ class RigidObjectData:
     ##
     # Properties.
     ##
+
+    @property
+    def ID(self) -> str:
+        """Root position in simulation world frame. Shape is (num_instances, 3)."""
+        return self.id
+
 
     @property
     def root_state_w(self):

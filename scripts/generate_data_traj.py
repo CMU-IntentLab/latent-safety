@@ -85,7 +85,7 @@ def gen_one_traj_img(x_min, x_max, y_min, y_max, u_max, dt, v, dpi, rand=-1):
     plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
     buf = io.BytesIO()
-    plt.savefig('logs/tests/test'+str(t)+'.png', dpi=dpi)
+    #plt.savefig('logs/tests/test'+str(t)+'.png', dpi=dpi)
     plt.savefig(buf, format='png', dpi=dpi)
     buf.seek(0)
 

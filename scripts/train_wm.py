@@ -326,7 +326,7 @@ def train_eval(config):
         recon_eval = eval_obs_recon()  # testing observation reconstruction
 
         agent.train()
-        return recon_eval, recon_eval
+        return recon_eval
 
     def collect_rollouts(state, num_steps):
         agent.eval()
@@ -365,8 +365,7 @@ def train_eval(config):
             if step < config.pretrain_joint_steps
             else "pretrain_actor"
         )
-        best_pretrain_success = float("inf")
-        best_pretrain_success = float("inf")
+        best_pretrain_score = float("inf")
         for step in trange(
             total_pretrain_steps,
             desc="Encoder + Actor pretraining",
@@ -381,11 +380,11 @@ def train_eval(config):
             ):
                
                 print('eval')
-                score, success = evaluate(
+                score = evaluate(
                     other_dataset=expert_dataset, eval_prefix="pretrain"
                 )
-                best_pretrain_success = tools.save_checkpoint(
-                    ckpt_name, step, success, best_pretrain_success, agent, logdir
+                best_pretrain_score = tools.save_checkpoint(
+                    ckpt_name, step, score, best_pretrain_score, agent, logdir
                 )
 
     

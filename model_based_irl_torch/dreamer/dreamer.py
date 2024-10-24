@@ -483,7 +483,6 @@ class Dreamer(nn.Module):
         xs = np.linspace(-1, 1, nx)
         ys = np.linspace(-1, 1, ny)
         thetas= np.linspace(0, 2*np.pi, nz, endpoint=True)
-        print(thetas)
         tn, tp, fn, fp = 0, 0, 0, 0
         it = np.nditer(v, flags=['multi_index'])
         ###
@@ -613,8 +612,8 @@ class Dreamer(nn.Module):
                     
                     
                     gamma = 0.75
-                    lx_loss = (1/pos.size(0))*torch.sum(torch.relu(gamma - pos)) #penalizes safe for being positive
-                    lx_loss +=  (1/neg.size(0))*torch.sum(torch.relu(gamma + neg)) # penalizes unsafe for being negative
+                    lx_loss = (1/pos.size(0))*torch.sum(torch.relu(gamma - pos)) #penalizes safe for being negative
+                    lx_loss +=  (1/neg.size(0))*torch.sum(torch.relu(gamma + neg)) # penalizes unsafe for being positive
                     
                     lx_loss = lx_loss
             

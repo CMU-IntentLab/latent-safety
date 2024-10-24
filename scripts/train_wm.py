@@ -122,7 +122,8 @@ def train_eval(config):
 
 
     # == CONFIGURATION ==
-    env_name = "dubins_car_img-v1"
+    #env_name = "dubins_car_img_cont-v1"
+    env_name = "dubins_car_img-v1" # showing Lasse the DDQN version
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     maxUpdates = config.maxUpdates
     updateTimes = config.updateTimes
@@ -163,7 +164,6 @@ def train_eval(config):
     acts = train_envs[0].action_space'''
     ### TODO: CLEAN ABOVE ###
     acts = train_envs[0].action_space
-    print(dir(acts))
     bounds = np.array([[-1.1, 1.1], [-1.1, 1.1], [0, 2 * np.pi]])
     low = bounds[:, 0]
     high = bounds[:, 1]
@@ -312,57 +312,21 @@ def train_eval(config):
 
         # For Logging (1 episode)
         if config.video_pred_log:
-            '''_, _ = tools.simulate(
-                eval_policy,
-                eval_envs,
-                eval_eps,
-                config.evaldir,
-                logger,
-                is_eval=True,
-                episodes=1,
-                eval_prefix=eval_prefix,
-            )'''
             video_pred = agent._wm.video_pred(next(eval_dataset))
-            #video_pred = agent._wm.video_pred(next(expert_dataset))
             logger.video("eval_recon/openl_agent", to_np(video_pred))
-            #logger.video("eval_recon/openl_hand", to_np(video_pred2))
 
             if other_dataset:
                 video_pred = agent._wm.video_pred(next(other_dataset))
                 logger.video("train_recon/openl_agent", to_np(video_pred))
-                #logger.video("train_recon/openl_hand", to_np(video_pred2))
 
-        # Get stats
-        '''eval_success, eval_score, eval_ep_len = ModelEvaluator(
-            config=config,
-            agent=eval_policy,
-            env=eval_envs[0]._env,
-            default_seed=config.seed,
-            NUM_SEEDS=config.eval_num_seeds,
-            NUM_EVALS_PER_SEED=config.eval_per_seed,
-        ).evaluate_agent()'''
-
-        # Update the metrics in the logger
-        #logger.scalar(f"{eval_prefix}/eval_return", eval_score)
-        #logger.scalar(f"{eval_prefix}/eval_length", eval_ep_len)
-        #logger.scalar(f"{eval_prefix}/eval_success", eval_success)
         logger.scalar(
             f"{eval_prefix}/eval_episodes", config.eval_num_seeds * config.eval_per_seed
         )
         logger.write(step=logger.step)
         recon_eval = eval_obs_recon()  # testing observation reconstruction
 
-        # Evaluate MSE for pretraining
-        #with torch.no_grad():
-            #eval_agent = tools.DreamerAgent(agent)
-            #avg_mse = tools.evaluate_mse_trajectories(
-            #    eval_agent, expert_val_eps, config
-            #)
-        #logger.scalar(f"{eval_prefix}/validation_mse", avg_mse)
-
         agent.train()
         return recon_eval, recon_eval
-        #return eval_score, eval_success
 
     def collect_rollouts(state, num_steps):
         agent.eval()
@@ -428,7 +392,6 @@ def train_eval(config):
             exp_data = next(expert_dataset)
 
             agent.pretrain_model_only(exp_data, step)
-            #agent.pretrain_actor_model(exp_data, step)
 
 
         close_envs(train_envs + eval_envs)
@@ -438,7 +401,7 @@ def train_eval(config):
     lx_mlp, lx_opt = train_lx('classifier', logdir)
     exit()
 
-
+    '''
     # ==================== Prefill dataset ====================
     state = None
     if not config.offline_traindir:
@@ -603,7 +566,7 @@ def train_eval(config):
         tbar.update(config.steps_per_batch)
         _iter += 1
         logger.write()
-
+    '''
     close_envs(train_envs + eval_envs)
 
 

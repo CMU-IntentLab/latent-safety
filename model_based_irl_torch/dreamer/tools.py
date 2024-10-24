@@ -296,8 +296,14 @@ def fill_expert_dataset(config, cache, is_val_set=False):
     return obj_size
 
 def fill_expert_dataset_dubins(config, cache, is_val_set=False):
+    # showing Lasse the DDQN version of the Dubins example
     dataset_path = '/home/kensuke/latent-safety/datasets/demos128.pkl'
+    #dataset_path = '/home/kensuke/latent-safety/datasets/demos128_cont_ac.pkl'
     #dataset_path = '/home/kensuke/latent-safety/datasets/biased_demos.pkl'
+    if 'cont_ac' in dataset_path:
+        cont_ac = True
+    else:
+        cont_ac = False
     with open(dataset_path, 'rb') as f:
         demos = pickle.load(f)
     # if is_val_set, we don't fill the first num_exp_trajs which are used for training
@@ -351,13 +357,17 @@ def fill_expert_dataset_dubins(config, cache, is_val_set=False):
             transition["is_last"] = np.array(traj["dones"][t], dtype=np.bool_)
             transition["is_terminal"] = np.array(traj["dones"][t], dtype=np.bool_)
             transition["discount"] = np.array(1, dtype=np.float32)
-            if traj["actions"][t] < 0: # umin
-                traj["actions"][t] = [1, 0, 0]
-            elif traj["actions"][t] == 0: # zero
-                traj["actions"][t] = [0, 1, 0]
-            else:   # umax
-                traj["actions"][t] = [0, 0, 1]
-            transition["action"] = np.array(traj["actions"][t], dtype=np.uint8)
+            if not cont_ac:
+                if traj["actions"][t] < 0: # umin
+                    traj["actions"][t] = [1, 0, 0]
+                elif traj["actions"][t] == 0: # zero
+                    traj["actions"][t] = [0, 1, 0]
+                else:   # umax
+                    traj["actions"][t] = [0, 0, 1]
+            
+                transition["action"] = np.array(traj["actions"][t], dtype=np.uint8)
+            else:
+                transition["action"] = np.array(traj["actions"][t], dtype=np.float32)
             #transition["action"] = np.array(traj["actions"][t], dtype=np.float32)
             add_to_cache(cache, f"exp_traj_{i}", transition)
             # transitions in real env also have 'logprob' key, but doesn't seem to ever be used

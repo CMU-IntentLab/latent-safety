@@ -55,7 +55,7 @@ class RSSM(nn.Module):
         if self._discrete:
             inp_dim = self._stoch * self._discrete + num_actions
         else:
-            inp_dim = self._stoch + num_actions
+            inp_dim = self._stoch + num_actions        
         inp_layers.append(nn.Linear(inp_dim, self._hidden, bias=False))
         if norm:
             inp_layers.append(nn.LayerNorm(self._hidden, eps=1e-03))

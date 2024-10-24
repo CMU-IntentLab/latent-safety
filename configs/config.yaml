@@ -1,6 +1,6 @@
 defaults:
 
-  logdir: "logs/dreamer_cont"
+  logdir: "logs/dreamer_dubins"
   traindir: null
   evaldir: null
   offline_traindir: ''
@@ -20,8 +20,10 @@ defaults:
   precision: 32
   debug: False
   video_pred_log: True
-  from_ckpt: /home/kensuke/latent-safety/logs/dreamer_cont/0922/030257/best_pretrain_joint_0_36.pt #/home/kensuke/latent-safety/logs/dreamer_cont/0921/151810/best_pretrain_joint_0_33.pt #/home/kensuke/latent-safety/logs/dreamer_cont/0920/102553/best_pretrain_joint_0_18.pt  #/home/kensuke/latent-safety/logs/dreamer_cont/0918/110223/best_pretrain_joint_0_13.pt #/home/kensuke/latent-safety/logs/dreamer_cont/0915/045150/best_pretrain_joint_0_14.pt
-  lx_ckpt: /home/kensuke/latent-safety/logs/dreamer_cont/0922/030257/best_classifier_0_01.pt #/home/kensuke/latent-safety/logs/dreamer_cont/0921/151810/best_classifier_0_01.pt #/home/kensuke/latent-safety/logs/dreamer_cont/0920/150347/best_classifier_0_03.pt #/home/kensuke/latent-safety/logs/dreamer_cont/0918/175717/classifier.pt
+  from_ckpt: /home/kensuke/latent-safety/logs/dreamer_cont/0922/030257/best_pretrain_joint_0_36.pt # /home/kensuke/latent-safety/logs/dreamer_cont_ac/0924/174725/best_pretrain_joint_0_34.pt  
+  lx_ckpt: /home/kensuke/latent-safety/logs/dreamer_cont/0922/030257/best_classifier_0_01.pt #/home/kensuke/latent-safety/logs/dreamer_cont_ac/0924/203146/best_classifier_0_02.pt 
+  num_actions: 3
+
   from_prefill_dir: null
   obs_step: 1
 
@@ -39,7 +41,7 @@ defaults:
 
   # Robomimic data
   exp_name: ''
-  image_size: 64
+  image_size: 128
   shape_rewards: True
   shift_rewards: False
   multi_task_data: False
@@ -206,7 +208,6 @@ defaults:
   gt_lx: False
   # num datapts for training encoder, transition, classifier
   num_pts: 5000
-  num_actions: 3
 
   #lx_path: /home/kensuke/latent-safety/logs/classifier/failure_set.pth
   #lx_img_path: /home/kensuke/latent-safety/logs/classifier_img/failure_set_img.pth
@@ -235,3 +236,40 @@ defaults:
 
   # Dubins car parameters
   u_max: 1.25
+
+
+
+
+  #task_lcrl: dubins_wm-v0 # ra_droneracing_Game-v6, ra_highway_Game-v2, ra_1d_Game-v0
+  #reward-threshold: null 
+  ##seed: 0 
+  #buffer-size: 40000 
+  #actor-lr: 1e-4
+  #critic-lr: 1e-3
+  #gamma_lcrl: 0.95 # type=float, default=0.95)
+  #tau: 0.005 # type=float, default=0.005)
+  #exploration-noise: 0.1 # type=float, default=0.1)
+  #epoch: 10 # type=int, default=10)
+  #total-episodes: 160 # type=int, default=160)
+  #step-per-epoch: 40000 # type=int, default=40000)
+  #step-per-collect: 8 # type=int, default=8)
+  #update-per-step: 0.125 # type=float, default=0.125)
+  #batch_size_lcrl: 512 # type=int, default=512)
+  #control-net: [512, 512, 512, 512] # type=int, nargs='*', default=None) # for control policy
+  #disturbance-net: [512, 512, 512, 512] #type=int, nargs='*', default=None) # for disturbance policy
+  #critic-net: [512, 512, 512, 512] # type=int, nargs='*', default=None) # for critic net
+  #training-num: 1 # type=int, default=8)
+  #test-num: 1 # type=int, default=100)
+  #render: 0. # type=float, default=0.)
+  #rew-norm: False # action="store_true", default=False)
+  #n-step: 1 # type=int, default=1)
+  #continue-training-logdir: null # type=str, default=None)
+  #continue-training-epoch: null # type=int, default=None)
+  #actor-gradient-steps: 1 # type=int, default=1)
+  #is-game-baseline: False # type=bool, default=False) # it will be set automatically
+  #target-update-freq: 400 # type=int, default=400)
+#
+  #actor-activation: 'ReLU' #type=str, default='ReLU')
+  #critic-activation: 'ReLU' # type=str, default='ReLU')
+  #kwargs: {} # type=str, default='{}')
+  #warm-start-path: null # type=str, default=None) # e.g., log/ra_droneracing_Game-v6/epoch_id_10/policy.pth

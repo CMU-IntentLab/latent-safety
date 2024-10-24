@@ -297,7 +297,7 @@ def fill_expert_dataset(config, cache, is_val_set=False):
 
 def fill_expert_dataset_dubins(config, cache, is_val_set=False):
     # showing Lasse the DDQN version of the Dubins example
-    dataset_path = '/home/kensuke/latent-safety/datasets/demos128.pkl'
+    dataset_path = '/home/lassepe/worktree/latent-safety/datasets/demos128.pkl'
     #dataset_path = '/home/kensuke/latent-safety/datasets/demos128_cont_ac.pkl'
     #dataset_path = '/home/kensuke/latent-safety/datasets/biased_demos.pkl'
     if 'cont_ac' in dataset_path:

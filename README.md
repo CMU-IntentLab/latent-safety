@@ -1,7 +1,7 @@
 # latent-safety
 
 # making conda env
-conda env create -f environment.yaml
+conda env create -f requirements.yaml
 
 # generating data
 mkdir datasets

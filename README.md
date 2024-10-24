@@ -1,10 +1,19 @@
 # latent-safety
 
 # making conda env
-conda create --name latent --file requirements.txt
+conda create --name latent --file requirements.yaml
+
+
+# generating data
+python scripts/generate_data_traj.py
 
 # training WM + Classifier
 python scripts/train_wm.py
+
+
+Add the best pretrained classifier and WM to the config file
+
+python scripts/RARL_wm.py
 
 
 ## EVERYTHING BELOW IS OLD

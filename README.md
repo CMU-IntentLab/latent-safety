@@ -11,8 +11,12 @@ python scripts/generate_data_traj.py
 python scripts/train_wm.py
 
 
-Add the best pretrained classifier and WM to the config file
+Add the best pretrained classifier and WM to the configs/config.yaml file
+from_ckpt: # wm
+lx_ckpt: # classifier
 
+
+Run reachability computation
 python scripts/RARL_wm.py
 
 

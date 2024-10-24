@@ -34,7 +34,7 @@ import math
 - Call HJSolver function
 """
 
-config_path = '/home/kensuke/latent-safety/configs/config.yaml'
+config_path = '/home/lassepe/worktree/latent-safety/configs/config.yaml'
 with open(config_path, 'r') as file:
     config = yaml.safe_load(file)['defaults']
 num_pts = config['num_pts']

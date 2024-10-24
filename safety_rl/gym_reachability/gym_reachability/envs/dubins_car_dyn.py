@@ -86,12 +86,12 @@ class DubinsCarDyn(object):
     self.safetyScaling = 1.
 
     self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    self.MLP_margin = MLP(3, 1, 256).to(self.device)
-    self.MLP_margin.load_state_dict(torch.load('/home/kensuke/latent-safety/logs/classifier/failure_set.pth'))
-    self.MLP_margin.eval()  # Set the model to evaluation mode
-    self.MLP_dyn = MLP(4, 3, 256).to(self.device)
-    self.MLP_dyn.load_state_dict(torch.load('/home/kensuke/latent-safety/logs/dynamics/dynamics.pth'))
-    self.MLP_dyn.eval()  # Set the model to evaluation mode
+    #self.MLP_margin = MLP(3, 1, 256).to(self.device)
+    #self.MLP_margin.load_state_dict(torch.load('/home/kensuke/latent-safety/logs/classifier/failure_set.pth'))
+    #self.MLP_margin.eval()  # Set the model to evaluation mode
+    #self.MLP_dyn = MLP(4, 3, 256).to(self.device)
+    #self.MLP_dyn.load_state_dict(torch.load('/home/kensuke/latent-safety/logs/dynamics/dynamics.pth'))
+    #self.MLP_dyn.eval()  # Set the model to evaluation mode
 
   def set_encoder(self):
     self.image = True

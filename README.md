@@ -5,6 +5,7 @@ conda env create -f requirements.yaml
 
 
 # generating data
+mkdir datasets
 python scripts/generate_data_traj.py
 
 # training WM + Classifier

@@ -1,7 +1,7 @@
 # latent-safety
 
 # making conda env
-conda create --name latent --file requirements.yaml
+conda env create -f requirements.yaml
 
 
 # generating data

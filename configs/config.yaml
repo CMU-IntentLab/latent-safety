@@ -20,8 +20,8 @@ defaults:
   precision: 32
   debug: False
   video_pred_log: True
-  from_ckpt: /home/kensuke/latent-safety/logs/dreamer_cont/0922/030257/best_pretrain_joint_0_36.pt # /home/kensuke/latent-safety/logs/dreamer_cont_ac/0924/174725/best_pretrain_joint_0_34.pt  
-  lx_ckpt: /home/kensuke/latent-safety/logs/dreamer_cont/0922/030257/best_classifier_0_01.pt #/home/kensuke/latent-safety/logs/dreamer_cont_ac/0924/203146/best_classifier_0_02.pt 
+  from_ckpt: /home/lassepe/worktree/latent-safety/logs/dreamer_dubins/1024/115719/best_pretrain_joint_0_39.pt
+  lx_ckpt: /home/lassepe/worktree/latent-safety/logs/dreamer_dubins/1024/115719/best_classifier_0_02.pt
   num_actions: 3
 
   from_prefill_dir: null

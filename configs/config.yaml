@@ -218,7 +218,7 @@ defaults:
   #enc_img_inv_path: /home/kensuke/latent-safety/logs/dynamics_img_inv/encoder_img.pth
   #dyn_img_data: /home/kensuke/latent-safety/datasets/dyn_data.pkl
   #lx_img_data: /home/kensuke/latent-safety/datasets/classifier_data.pkl
-  grid_path: /home/kensuke/latent-safety/logs/grid/LS_BRT_v1_w1.25.npy
+  grid_path: /home/lassepe/worktree/latent-safety/logs/grid/LS_BRT_v1_w1.25.npy
   # HJ computation bounds
   x_min: -1.1
   x_max: 1.1

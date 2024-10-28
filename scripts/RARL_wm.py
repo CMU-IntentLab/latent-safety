@@ -378,6 +378,8 @@ def RARL(config):
       y = ys[idx[1]]
 
       state = np.array([x, y, 0.])
+      # TODO: this is wrong: for deraimer, the Q_network expects a latent state, not the actual state of the env
+      # how to get this latent state from a regular state?
       stateTensor = torch.FloatTensor(state).to(agent.device).unsqueeze(0)
       action_index = agent.Q_network(stateTensor).max(dim=1)[1].item()
       actDistMtx[idx] = action_index

@@ -385,6 +385,7 @@ class DDQNSingle(DDQN):
       figureFolder = os.path.join(outFolder, "figure")
       os.makedirs(figureFolder, exist_ok=True)
 
+
     while self.cntUpdate <= MAX_UPDATES:
       s = env.reset()
       if type(s) == dict:

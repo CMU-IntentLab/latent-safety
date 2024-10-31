@@ -54,6 +54,13 @@ matplotlib.use('Agg')
 simplefilter(action='ignore', category=FutureWarning)
 timestr = time.strftime("%Y-%m-%d-%H_%M")
 
+def recursive_update(base, update):
+    for key, value in update.items():
+        if isinstance(value, dict) and key in base:
+            recursive_update(base[key], value)
+        else:
+            base[key] = value
+
 def RARL(config):
   # == ARGS ==
 
@@ -205,7 +212,6 @@ def RARL(config):
     else:   
       g_x, _, _ = env.car.get_latent(x_lin, y_lin, theta_lin, imgs)
 
-
 ###
     v[idxs[:, 0], idxs[:, 1]] = g_x
     g_x = v
@@ -323,8 +329,8 @@ def RARL(config):
   trainDict['trainProgress'] = trainProgress
   filePath = os.path.join(outFolder, 'train')
 
+  # region: loss
   if config.plotFigure or config.storeFigure:
-    # region: loss
     fig, axes = plt.subplots(1, 2, figsize=(8, 4))
 
     data = trainRecords
@@ -445,12 +451,6 @@ def RARL(config):
   save_obj(trainDict, filePath)
 
 
-def recursive_update(base, update):
-    for key, value in update.items():
-        if isinstance(value, dict) and key in base:
-            recursive_update(base[key], value)
-        else:
-            base[key] = value
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--configs", nargs="+")

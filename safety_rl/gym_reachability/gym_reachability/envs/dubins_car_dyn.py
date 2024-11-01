@@ -187,7 +187,8 @@ class DubinsCarDyn(object):
       bs = int(np.shape(imgs)[0]/chunks)
     else:
       bs = int(np.shape(imgs)[0]/chunks)
-    
+
+    # === compute the observation embeddings for all states from their images
     for i in range(chunks):
       if i == chunks-1:
         data = {'obs_state': states[i*bs:], 'image': imgs[i*bs:], 'action': dummy_acs[i*bs:], 'is_first': firsts[i*bs:], 'is_terminal': lasts[i*bs:]}
@@ -201,11 +202,9 @@ class DubinsCarDyn(object):
       else:
         embed = torch.cat([embed, embeds], dim=0)
 
-    
-    #data = {'obs_state': states, 'image': imgs, 'action': dummy_acs, 'is_first': firsts, 'is_terminal': lasts}
-#
-    #data = self.wm.preprocess(data)
-    #embed = self.encoder(data)
+
+    # === Take one dummy-action step starting from the initial embedding.
+    #     This is needed because otherwise we don't know how to assign a latent state to the initial embedding.
     data = {'obs_state': states, 'image': imgs, 'action': dummy_acs, 'is_first': firsts, 'is_terminal': lasts}
     data = self.wm.preprocess(data)
     post, prior = self.wm.dynamics.observe(
@@ -545,7 +544,8 @@ class DubinsCarDyn(object):
       return self.gt_safety_margin(s)
     elif self.use_wm:
       self.MLP_margin.eval()
-      feat = self.wm.dynamics.get_feat(s).detach()
+      # `s` needs to be converted if it is a dict
+      feat = self.wm.dynamics.get_feat(s).detach() if type(s) == dict else s
       with torch.no_grad():  # Disable gradient calculation
         outputs = self.MLP_margin(feat)
         g_xList.append(outputs.detach().cpu().numpy())

@@ -631,7 +631,7 @@ class DubinsCarOneEnvImg(gym.Env):
   # == Trajectory Functions ==
   def simulate_one_trajectory(
       self, q_func, T=10, state=None, theta=None, sample_inside_obs=True,
-      sample_inside_tar=True, toEnd=False
+      sample_inside_tar=True, toEnd=False, enable_observation_feedback=False,
   ):
     """Simulates the trajectory given the state or randomly initialized.
 
@@ -656,6 +656,14 @@ class DubinsCarOneEnvImg(gym.Env):
         float: the minimum reach-avoid value of the trajectory.
         dictionary: extra information, (v_x, g_x, ell_x) along the traj.
     """
+
+
+    # memorize the initial car state so that we can restore it later:
+    car_state_backup = {
+      'state': self.car.state,
+      'latent': self.car.latent if hasattr(self.car, 'latent') else None,
+      'alive': self.car.alive,
+    }
     # reset
     if state is None:
       if self.car.use_wm:
@@ -675,6 +683,10 @@ class DubinsCarOneEnvImg(gym.Env):
         state_gt = state
         img = self.capture_image(state)
         g_x, feat, post = self.car.get_latent([state[0]], [state[1]], [state[2]], [img])
+        self.car.latent = post
+
+    self.car.state = state_gt
+
     traj = []
     result = 0  # not finished
     valueList = []
@@ -685,7 +697,9 @@ class DubinsCarOneEnvImg(gym.Env):
       traj.append(state_gt)
 
       if self.car.use_wm:
-        g_x = g_x
+        # g_x = g_x
+        # TODO: not sure if this actually accepts `feat` or wether it needs the `post` output
+        g_x = self.car.safety_margin(torch.Tensor(feat).to(self.device))
       else:
         g_x = self.safety_margin(state)
       if self.car.gt_lx:
@@ -711,11 +725,29 @@ class DubinsCarOneEnvImg(gym.Env):
           break
 
       q_func.eval()
-      state_tensor = (torch.FloatTensor(feat).to(self.device).unsqueeze(0))
+      state_tensor = torch.Tensor(feat).to(self.device).unsqueeze(0)
       action_index = q_func(state_tensor).max(dim=1)[1].item()
       u = self.car.discrete_controls[action_index]
+      action_tensor = torch.Tensor([action_index]).to(self.device).long()
 
-      state_gt = self.car.integrate_forward(state_gt, u)
+      if self.car.use_wm:
+        distance = np.linalg.norm(state_gt - self.car.state)
+        assert distance < 1e-8, (
+            "There is a mismatch between the env state"
+            + "and car state: {:.2e}".format(distance)
+        )
+        latent, state_gt, _ = self.car.step(action_tensor)
+        feat = self.car.wm.dynamics.get_feat(latent).squeeze()
+        # TODO: In closed-loop operation, could also update the image
+        # img = ...
+      else:
+        state_gt, _ = self.car.step(action_tensor)
+
+    # restore the car state from the backup:
+    self.car.state = car_state_backup['state']
+    self.car.latent = car_state_backup['latent']
+    self.car.alive = car_state_backup['alive']
+
     traj = np.array(traj)
     info = {"valueList": valueList, "gxList": gxList, "lxList": lxList}
     return traj, result, minV, info

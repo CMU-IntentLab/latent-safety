@@ -49,6 +49,7 @@ from datetime import datetime
 from pathlib import Path
 from termcolor import cprint
 
+debugging_eval = True
 
 matplotlib.use('Agg')
 simplefilter(action='ignore', category=FutureWarning)
@@ -175,7 +176,7 @@ def RARL(config):
   env.set_seed(config.randomSeed)
   
   # == Get and Plot max{l_x, g_x} ==
-  if config.plotFigure or config.storeFigure:
+  if (config.plotFigure or config.storeFigure) and not debugging_eval:
     nx, ny = 51, 51
     
     v = np.zeros((nx, ny))
@@ -290,7 +291,7 @@ def RARL(config):
 
   vmin = -1
   vmax = 1
-  if config.warmup:
+  if config.warmup and not debugging_eval:
     print("\n== Warmup Q ==")
     lossList = agent.initQ(
         env, config.warmupIter, outFolder, num_warmup_samples=200, vmin=vmin,
@@ -313,6 +314,11 @@ def RARL(config):
         plt.show()
         plt.pause(0.001)
       plt.close()
+
+  asdf = env.simulate_trajectories(
+    agent.Q_network, T=maxSteps, num_rnd_traj=10,
+    toEnd=False
+  )
 
   print("\n== Training Information ==")
   vmin = -1

@@ -2,3 +2,4 @@ datasets/
 wandb/
 __pycache__/
 logs/
+/.vscode/

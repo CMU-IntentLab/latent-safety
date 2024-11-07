@@ -683,7 +683,8 @@ class DubinsCarOneEnvImg(gym.Env):
         state_gt = state
         img = self.capture_image(state)
         g_x, feat, post = self.car.get_latent([state[0]], [state[1]], [state[2]], [img])
-        self.car.latent = post
+        # `car.latent` has no time dimension, so we need to squeeze it:
+        self.car.latent = { k: v.squeeze(1) for k, v in post.items() }
 
     self.car.state = state_gt
 
@@ -736,10 +737,8 @@ class DubinsCarOneEnvImg(gym.Env):
             "There is a mismatch between the env state"
             + "and car state: {:.2e}".format(distance)
         )
-        latent, state_gt, _ = self.car.step(action_tensor)
+        latent, state_gt, _ = self.car.step(action_tensor, enable_observation_feedback=enable_observation_feedback)
         feat = self.car.wm.dynamics.get_feat(latent).squeeze()
-        # TODO: In closed-loop operation, could also update the image
-        # img = ...
       else:
         state_gt, _ = self.car.step(action_tensor)
 

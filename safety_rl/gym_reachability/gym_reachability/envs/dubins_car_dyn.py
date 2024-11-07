@@ -334,11 +334,14 @@ class DubinsCarDyn(object):
     return img_array
 
   # == Dynamics ==
-  def step(self, action):
-    """Evolves the environment one step forward given an action.
+  def step(self, action, enable_observation_feedback=False):
+    """Evolves the environment one step forward given an action and optionally some observation feedback.
 
     Args:
         action (int): the index of the action in the action set.
+        enable_observation_feedback (bool, optional): if set to true, latent
+          transitions are computed with observation feedback rather than in
+          open-loop.
 
     Returns:
         np.ndarray: next state.
@@ -346,6 +349,14 @@ class DubinsCarDyn(object):
     """
     if type(action) == dict:
       action = np.argmax(action[ 'action' ])
+
+    if enable_observation_feedback:
+      assert self.use_wm, 'Observation feedback is only available for the learned model.'
+
+    # step gt state
+    u = self.discrete_controls[action]
+    next_gt_state = self.integrate_forward(self.state, u)
+    self.state = next_gt_state
 
     # step latent state
     if self.use_wm:
@@ -357,17 +368,29 @@ class DubinsCarDyn(object):
 
       img_ac = torch.zeros(3).to(self.device)
       img_ac[action] = 1
-      img_ac = img_ac.unsqueeze(0).unsqueeze(0)
-      
-      init = {k: v[:, -1] for k, v in self.latent.items()}
-      self.latent = self.wm.dynamics.imagine_with_action(img_ac, init)
+      img_ac = img_ac.unsqueeze(0).unsqueeze(0) #unsqueeze time and batch dimension
+
+      # if we operate under observation feedback, generate the image coorresponding to the next state
+      # and update the model accordingly
+      if enable_observation_feedback:
+        image_observation = self.get_image(next_gt_state[:2], next_gt_state[2])
+        data = self._get_transition_data_dict(
+          thetas = np.array([self.state[2]]),
+          imgs = np.array([image_observation]),
+          actions = np.array(img_ac.cpu().numpy()),
+          firsts = np.zeros((1, 1)),
+          lasts = np.zeros((1, 1))
+        )
+        embed = self.get_embeddings(data)
+        # `obs_step` expects no 
+        posterior, _ = self.wm.dynamics.obs_step(self.latent, data["action"].squeeze(0), embed.squeeze(0), data["is_first"].squeeze(0))
+        self.latent = posterior
+      else:
+        init = {k: v[:, -1] for k, v in self.latent.items()}
+        prior = self.wm.dynamics.imagine_with_action(img_ac, init)
+        self.latent = prior
     else:
       g_x_cur = self.safety_margin(self.state[:2])
-
-    # step gt state
-    u = self.discrete_controls[action]
-    state = self.integrate_forward(self.state, u)
-    self.state = state
 
     # done
     if self.doneType == 'toEnd':

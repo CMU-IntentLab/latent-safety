@@ -167,46 +167,43 @@ class DubinsCarDyn(object):
       self.latent = latent
       return latent.copy(), np.copy(gt_state)
 
-  def get_latent(self, xs, ys, thetas, imgs):
+  def _get_transition_data_dict(self, thetas, imgs, actions, firsts, lasts):
     states = np.expand_dims(np.expand_dims(thetas,1),1)
     imgs = np.expand_dims(imgs, 1)
+    cos = np.cos(states)
+    sin = np.sin(states)
+    states = np.concatenate([cos, sin], axis=-1)
+    return self.wm.preprocess({'obs_state': states, 'image': imgs, 'action': actions, 'is_first': firsts, 'is_terminal': lasts})
+  
+  def get_embeddings(self, data, chunks = 1):
+    batch_size = int(np.shape(data["image"])[0]/chunks)
+    # === compute the observation embeddings for all states from their images
+    for i in range(chunks):
+      if i == chunks-1:
+        data_chunk = {k: v[i*batch_size:] for k, v in data.items()}
+      else:
+        data_chunk = {k: v[i*batch_size:(i+1)*batch_size] for k, v in data.items()}
+      embed_chunk = self.encoder(data_chunk)
+      if i == 0:
+        embed = embed_chunk
+      else:
+        embed = torch.cat([embed, embed_chunk], dim=0)
+    return embed
+
+
+  def get_latent(self, xs, ys, thetas, imgs):
+    # states = np.expand_dims(np.expand_dims(thetas,1),1)
+    # imgs = np.expand_dims(imgs, 1)
     dummy_acs = np.zeros((np.shape(xs)[0], 1, 3))
     rand_idx = 1 #go straight #np.random.randint(0, 3, np.shape(xs)[0])
     dummy_acs[np.arange(np.shape(xs)[0]), :, rand_idx] = 1
     firsts = np.ones((np.shape(xs)[0], 1))
     lasts = np.zeros((np.shape(xs)[0], 1))
-    
-    cos = np.cos(states)
-    sin = np.sin(states)
-
-    states = np.concatenate([cos, sin], axis=-1)
-
-
-    chunks = 21
-    if np.shape(imgs)[0] > chunks:
-      bs = int(np.shape(imgs)[0]/chunks)
-    else:
-      bs = int(np.shape(imgs)[0]/chunks)
-
-    # === compute the observation embeddings for all states from their images
-    for i in range(chunks):
-      if i == chunks-1:
-        data = {'obs_state': states[i*bs:], 'image': imgs[i*bs:], 'action': dummy_acs[i*bs:], 'is_first': firsts[i*bs:], 'is_terminal': lasts[i*bs:]}
-      else:
-        data = {'obs_state': states[i*bs:(i+1)*bs], 'image': imgs[i*bs:(i+1)*bs], 'action': dummy_acs[i*bs:(i+1)*bs], 'is_first': firsts[i*bs:(i+1)*bs], 'is_terminal': lasts[i*bs:(i+1)*bs]}
-
-      data = self.wm.preprocess(data)
-      embeds = self.encoder(data)
-      if i == 0:
-        embed = embeds
-      else:
-        embed = torch.cat([embed, embeds], dim=0)
-
+    data = self._get_transition_data_dict(thetas, imgs, dummy_acs, firsts, lasts)
+    embed = self.get_embeddings(data)
 
     # === Take one dummy-action step starting from the initial embedding.
     #     This is needed because otherwise we don't know how to assign a latent state to the initial embedding.
-    data = {'obs_state': states, 'image': imgs, 'action': dummy_acs, 'is_first': firsts, 'is_terminal': lasts}
-    data = self.wm.preprocess(data)
     post, prior = self.wm.dynamics.observe(
         embed, data["action"], data["is_first"]
         )

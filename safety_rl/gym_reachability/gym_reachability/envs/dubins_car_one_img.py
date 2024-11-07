@@ -683,8 +683,7 @@ class DubinsCarOneEnvImg(gym.Env):
         state_gt = state
         img = self.capture_image(state)
         g_x, feat, post = self.car.get_latent([state[0]], [state[1]], [state[2]], [img])
-        # `car.latent` has no time dimension, so we need to squeeze it:
-        self.car.latent = { k: v.squeeze(1) for k, v in post.items() }
+        self.car.latent = post
 
     self.car.state = state_gt
 
@@ -752,7 +751,7 @@ class DubinsCarOneEnvImg(gym.Env):
     return traj, result, minV, info
 
   def simulate_trajectories(
-      self, q_func, T=10, num_rnd_traj=None, states=None, toEnd=False
+      self, q_func, T=10, num_rnd_traj=None, states=None, toEnd=False, enable_observation_feedback=False
   ):
     """
     Simulates the trajectories. If the states are not provided, we pick the
@@ -796,7 +795,7 @@ class DubinsCarOneEnvImg(gym.Env):
         y = ys[idx[1]]
         state = np.array([x, y, 0.0])
         traj, result, minV, _ = self.simulate_one_trajectory(
-            q_func, T=T, state=state, toEnd=toEnd
+            q_func, T=T, state=state, toEnd=toEnd, enable_observation_feedback=enable_observation_feedback
         )
         trajectories.append((traj))
         results[idx] = result

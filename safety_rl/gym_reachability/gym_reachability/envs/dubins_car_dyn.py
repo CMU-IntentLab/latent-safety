@@ -372,6 +372,12 @@ class DubinsCarDyn(object):
 
       # if we operate under observation feedback, generate the image coorresponding to the next state
       # and update the model accordingly
+
+      # each element in `self.latent` must have 3 dimensions, otherwise, we dropped the batch or time dimension somewhere
+      assert all([len(v.shape) == 3 for v in self.latent.values()])
+
+      # get the latest state from the latent sqeuence
+      init = {k: v[:, -1] for k, v in self.latent.items()}
       if enable_observation_feedback:
         image_observation = self.get_image(next_gt_state[:2], next_gt_state[2])
         data = self._get_transition_data_dict(
@@ -382,11 +388,10 @@ class DubinsCarDyn(object):
           lasts = np.zeros((1, 1))
         )
         embed = self.get_embeddings(data)
-        # `obs_step` expects no 
-        posterior, _ = self.wm.dynamics.obs_step(self.latent, data["action"].squeeze(0), embed.squeeze(0), data["is_first"].squeeze(0))
-        self.latent = posterior
+        posterior, _ = self.wm.dynamics.obs_step(init, data["action"].squeeze(0), embed.squeeze(0), data["is_first"].squeeze(0))
+        # `obs_step` produces no time dimension for `posterior` so we have to add it here
+        self.latent = {k: v.unsqueeze(1) for k, v in posterior.items()}
       else:
-        init = {k: v[:, -1] for k, v in self.latent.items()}
         prior = self.wm.dynamics.imagine_with_action(img_ac, init)
         self.latent = prior
     else:

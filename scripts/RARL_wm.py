@@ -317,8 +317,9 @@ def RARL(config):
 
   asdf = env.simulate_trajectories(
     agent.Q_network, T=maxSteps, num_rnd_traj=10,
-    toEnd=False
+    toEnd=False, enable_observation_feedback=True
   )
+  assert False
 
   print("\n== Training Information ==")
   vmin = -1

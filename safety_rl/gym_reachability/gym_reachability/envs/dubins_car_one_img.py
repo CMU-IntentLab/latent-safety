@@ -632,7 +632,7 @@ class DubinsCarOneEnvImg(gym.Env):
   def simulate_one_trajectory(
       self, q_func, T=10, state=None, theta=None, sample_inside_obs=True,
       sample_inside_tar=True, toEnd=False, enable_observation_feedback=False,
-      wait_for_all_metrics_failed=False,
+      wait_for_all_metrics_to_predict_failure=False,
   ):
     """Simulates the trajectory given the state or randomly initialized.
 
@@ -707,6 +707,7 @@ class DubinsCarOneEnvImg(gym.Env):
       metrics["traj"].append(state)
       metrics["gxList"].append(g_x)
       metrics["minV"] = min(metrics["minV"], g_x)
+      metrics["valueList"].append(metrics["minV"])
 
     # 0: unfinished, 1: success, -1: failure
     result = 0
@@ -729,7 +730,7 @@ class DubinsCarOneEnvImg(gym.Env):
 
       groundtruth_failure = groundtruth_metrics["minV"] < 0
       if groundtruth_failure:
-        if not wait_for_all_metrics_failed or (self.car.use_wm and learned_metrics["minV"] < 0):
+        if not wait_for_all_metrics_to_predict_failure or (self.car.use_wm and learned_metrics["minV"] < 0):
           result = -1
           break
 
@@ -776,7 +777,8 @@ class DubinsCarOneEnvImg(gym.Env):
     return traj, result, minV, info
 
   def simulate_trajectories(
-      self, q_func, T=10, num_rnd_traj=None, states=None, toEnd=False, enable_observation_feedback=False
+      self, q_func, T=10, num_rnd_traj=None, states=None, toEnd=False, enable_observation_feedback=False,
+      wait_for_all_metrics_to_predict_failure=False, return_infos=False
   ):
     """
     Simulates the trajectories. If the states are not provided, we pick the
@@ -804,12 +806,13 @@ class DubinsCarOneEnvImg(gym.Env):
     trajectories = []
 
     if states is None:
-      nx = 41
+      nx = 3
       ny = nx
       xs = np.linspace(self.bounds[0, 0], self.bounds[0, 1], nx)
       ys = np.linspace(self.bounds[1, 0], self.bounds[1, 1], ny)
       results = np.empty((nx, ny), dtype=int)
       minVs = np.empty((nx, ny), dtype=float)
+      infos = {}
 
       it = np.nditer(results, flags=["multi_index"])
       print()
@@ -819,12 +822,14 @@ class DubinsCarOneEnvImg(gym.Env):
         x = xs[idx[0]]
         y = ys[idx[1]]
         state = np.array([x, y, 0.0])
-        traj, result, minV, _ = self.simulate_one_trajectory(
-            q_func, T=T, state=state, toEnd=toEnd, enable_observation_feedback=enable_observation_feedback
+        traj, result, minV, info = self.simulate_one_trajectory(
+            q_func, T=T, state=state, toEnd=toEnd, enable_observation_feedback=enable_observation_feedback,
+            wait_for_all_metrics_to_predict_failure=wait_for_all_metrics_to_predict_failure
         )
         trajectories.append((traj))
         results[idx] = result
         minVs[idx] = minV
+        infos[idx] = info
         it.iternext()
       results = results.reshape(-1)
       minVs = minVs.reshape(-1)
@@ -833,12 +838,16 @@ class DubinsCarOneEnvImg(gym.Env):
       results = np.empty(shape=(len(states),), dtype=int)
       minVs = np.empty(shape=(len(states),), dtype=float)
       for idx, state in enumerate(states):
-        traj, result, minV, _ = self.simulate_one_trajectory(
+        traj, result, minV, info = self.simulate_one_trajectory(
             q_func, T=T, state=state, toEnd=toEnd
         )
         trajectories.append(traj)
         results[idx] = result
         minVs[idx] = minV
+        infos[idx] = info
+
+    if return_infos:
+      return trajectories, results, minVs, infos
 
     return trajectories, results, minVs
 

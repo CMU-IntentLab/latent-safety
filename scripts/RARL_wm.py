@@ -317,7 +317,9 @@ def RARL(config):
 
   asdf = env.simulate_trajectories(
     agent.Q_network, T=maxSteps, num_rnd_traj=10,
-    toEnd=False, enable_observation_feedback=True
+    toEnd=False, enable_observation_feedback=True,
+    wait_for_all_metrics_to_predict_failure=True,
+    return_infos=True
   )
   assert False
 

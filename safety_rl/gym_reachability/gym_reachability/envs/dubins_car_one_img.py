@@ -1142,7 +1142,8 @@ class DubinsCarOneEnvImg(gym.Env):
 
   def plot_trajectories(
       self, q_func, T=100, num_rnd_traj=None, states=None, theta=None,
-      toEnd=False, ax=None, c="y", lw=1.5, orientation=0, zorder=2
+      toEnd=False, ax=None, c="y", lw=1.5, orientation=0, zorder=2,
+      enable_observation_feedback=False, save_dir=None
   ):
     """Plots trajectories given the agent's Q-network.
 
@@ -1183,15 +1184,23 @@ class DubinsCarOneEnvImg(gym.Env):
       states = tmpStates
 
     trajectories, results, minVs = self.simulate_trajectories(
-        q_func, T=T, num_rnd_traj=num_rnd_traj, states=states, toEnd=toEnd
+        q_func, T=T, num_rnd_traj=num_rnd_traj, states=states, toEnd=toEnd,
+        enable_observation_feedback=enable_observation_feedback
     )
     if ax is None:
       ax = plt.gca()
+    
+    # plot the failure set
+    self.plot_target_failure_set(ax, c_c="m", c_t="y", lw=3, zorder=0)
+
     for traj in trajectories:
       traj_x = traj[:, 0]
       traj_y = traj[:, 1]
       ax.scatter(traj_x[0], traj_y[0], s=48, c=c, zorder=zorder)
       ax.plot(traj_x, traj_y, color=c, linewidth=lw, zorder=zorder)
+
+    if save_dir is not None:
+      plt.savefig(save_dir, bbox_inches='tight')
 
     return results, minVs
 

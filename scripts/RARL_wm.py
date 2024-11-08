@@ -315,13 +315,19 @@ def RARL(config):
         plt.pause(0.001)
       plt.close()
 
-  asdf = env.simulate_trajectories(
-    agent.Q_network, T=maxSteps, num_rnd_traj=10,
-    toEnd=False, enable_observation_feedback=True,
-    wait_for_all_metrics_to_predict_failure=True,
-    return_infos=True
+  # asdf = env.simulate_trajectories(
+  #   agent.Q_network, T=maxSteps, num_rnd_traj=10,
+  #   toEnd=False, enable_observation_feedback=True,
+  #   wait_for_all_metrics_to_predict_failure=True,
+  #   return_infos=True
+  # )
+
+  env.plot_trajectories(
+      q_func=agent.Q_network, enable_observation_feedback=True, num_rnd_traj=10, save_dir='safe_rollouts.png'
   )
-  assert False
+
+  return 0
+
 
   print("\n== Training Information ==")
   vmin = -1

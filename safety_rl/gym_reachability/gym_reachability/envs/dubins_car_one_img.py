@@ -632,6 +632,7 @@ class DubinsCarOneEnvImg(gym.Env):
   def simulate_one_trajectory(
       self, q_func, T=10, state=None, theta=None, sample_inside_obs=True,
       sample_inside_tar=True, toEnd=False, enable_observation_feedback=False,
+      wait_for_all_metrics_failed=False,
   ):
     """Simulates the trajectory given the state or randomly initialized.
 
@@ -682,52 +683,60 @@ class DubinsCarOneEnvImg(gym.Env):
       if self.car.use_wm:
         state_gt = state
         img = self.capture_image(state)
-        g_x, feat, post = self.car.get_latent([state[0]], [state[1]], [state[2]], [img])
+        learned_g_x, feat, post = self.car.get_latent([state[0]], [state[1]], [state[2]], [img])
         self.car.latent = post
 
     self.car.state = state_gt
+    groundtruth_g_x = self.safety_margin(state_gt)
 
-    traj = []
-    result = 0  # not finished
-    valueList = []
-    gxList = []
-    lxList = []
-    
-    for t in range(T):
-      traj.append(state_gt)
+    groundtruth_metrics = {
+      "traj": [],
+      "valueList": [],
+      "gxList": [],
+      "minV": float('inf'),
+    }
 
+    learned_metrics = {
+      "traj": [],
+      "valueList": [],
+      "gxList": [],
+      "minV": float('inf'),
+    }
+
+    def _update_metrics(metrics, state, g_x):
+      metrics["traj"].append(state)
+      metrics["gxList"].append(g_x)
+      metrics["minV"] = min(metrics["minV"], g_x)
+
+    # 0: unfinished, 1: success, -1: failure
+    result = 0
+
+    # actual rollout of the policy over time
+    for _ in range(T):
+      groundtruth_g_x = self.safety_margin(state_gt)
       if self.car.use_wm:
-        # g_x = g_x
         # TODO: not sure if this actually accepts `feat` or wether it needs the `post` output
-        g_x = self.car.safety_margin(torch.Tensor(feat).to(self.device))
-      else:
-        g_x = self.safety_margin(state)
-      if self.car.gt_lx:
-        raise Exception('Not implemented')
-        g_x = self.safety_margin(state)
+        learned_g_x = self.car.safety_margin(torch.Tensor(feat).to(self.device))
+        _update_metrics(learned_metrics, state_gt, learned_g_x)
+
       # = Rollout Record
-      if t == 0:
-        minV = g_x #current
-      else:
-        minV = min(g_x, minV)
-
-      valueList.append(minV)
-      gxList.append(g_x)
-
+      _update_metrics(groundtruth_metrics, state_gt, groundtruth_g_x)
       if toEnd:
         done = not self.car.check_within_bounds(state_gt)
         if done:
           result = 1
           break
-      else:
-        if g_x < 0:
-          result = -1 # failed
+
+      groundtruth_failure = groundtruth_metrics["minV"] < 0
+      if groundtruth_failure:
+        if not wait_for_all_metrics_failed or (self.car.use_wm and learned_metrics["minV"] < 0):
+          result = -1
           break
 
+      # compute action
       q_func.eval()
       state_tensor = torch.Tensor(feat).to(self.device).unsqueeze(0)
       action_index = q_func(state_tensor).max(dim=1)[1].item()
-      u = self.car.discrete_controls[action_index]
       action_tensor = torch.Tensor([action_index]).to(self.device).long()
 
       if self.car.use_wm:
@@ -746,8 +755,24 @@ class DubinsCarOneEnvImg(gym.Env):
     self.car.latent = car_state_backup['latent']
     self.car.alive = car_state_backup['alive']
 
-    traj = np.array(traj)
-    info = {"valueList": valueList, "gxList": gxList, "lxList": lxList}
+    # construting outputs to match the previous version of the code for backward compatibility
+    traj = np.array(groundtruth_metrics["traj"])
+    if self.car.use_wm and not self.car.gt_lx:
+      minV = learned_metrics["minV"]
+      valueList = learned_metrics["valueList"]
+      gxList = learned_metrics["gxList"]
+    else:
+      minV = groundtruth_metrics["minV"]
+      valueList = groundtruth_metrics["valueList"]
+      gxList = groundtruth_metrics["gxList"]
+    result = result if minV >= 0 else -1
+
+    info = {
+      "valueList": valueList,
+      "gxList": gxList,
+      "groundtruth_metrics": groundtruth_metrics,
+      "learned_metrics": learned_metrics
+    }
     return traj, result, minV, info
 
   def simulate_trajectories(

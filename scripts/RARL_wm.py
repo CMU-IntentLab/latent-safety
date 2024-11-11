@@ -55,7 +55,91 @@ def recursive_update(base, update):
         else:
             base[key] = value
 
-def construct_environment(config):
+def visualize_env_failure_sets(env, config, figureFolder):
+  # == Get and Plot max{l_x, g_x} ==
+  if config.plotFigure or config.storeFigure:
+    nx, ny = 51, 51
+    
+    v = np.zeros((nx, ny))
+    #l_x = np.zeros((nx, ny))
+    g_x = np.zeros((nx, ny))
+    xs = np.linspace(env.bounds[0, 0], env.bounds[0, 1], nx)
+    ys = np.linspace(env.bounds[1, 0], env.bounds[1, 1], ny)
+
+    it = np.nditer(v, flags=['multi_index'])
+    ###
+    idxs = []  
+    imgs = []
+    thetas = []
+    it = np.nditer(v, flags=["multi_index"])
+    while not it.finished:
+      idx = it.multi_index
+      x = xs[idx[0]]
+      y = ys[idx[1]]
+      theta = np.random.random()*2*np.pi
+      assert theta > 0 and theta < 2*np.pi
+      thetas.append(theta)
+      if env.car.use_wm:
+        imgs.append(env.capture_image(np.array([x, y, theta])))
+        idxs.append(idx)        
+      it.iternext()
+    idxs = np.array(idxs)
+    x_lin = xs[idxs[:,0]]
+    y_lin = ys[idxs[:,1]]
+    theta_lin = np.array(thetas)
+    
+    if config.gt_lx:
+      raise Exception('Not implemented')
+      g_x = env.car.gt_safety_margin(np.array([x_lin, y_lin]))
+    else:   
+      g_x, _, _ = env.car.get_latent(x_lin, y_lin, theta_lin, imgs)
+
+###
+    v[idxs[:, 0], idxs[:, 1]] = g_x
+    g_x = v
+
+    vmax = round(max(np.max(g_x), 0),1)
+    vmin = round(min(np.min(g_x), -vmax),1)
+    axStyle = env.get_axes()
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+
+    ax = axes[0]
+    im = ax.imshow(
+        g_x.T, interpolation='none', extent=axStyle[0], origin="lower",
+        cmap="seismic", vmin=vmin, vmax=vmax, zorder=-1
+    )
+    cbar = fig.colorbar(
+        im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
+    )
+    cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=24)
+    ax.set_title(r'$g(x)$', fontsize=18)
+
+    ax = axes[1]
+    im = ax.imshow(
+        v.T > 0, interpolation='none', extent=axStyle[0], origin="lower",
+        cmap="seismic", vmin=-1, vmax=1, zorder=-1
+    )
+    cbar = fig.colorbar(
+        im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
+    )
+    cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=24)
+    ax.set_title(r'$v(x)$', fontsize=18)
+
+    for ax in axes:
+      env.plot_target_failure_set(ax=ax)
+      env.plot_formatting(ax=ax)
+
+    fig.tight_layout()
+    if config.storeFigure:
+      figurePath = os.path.join(figureFolder, 'env.png')
+      fig.savefig(figurePath)
+    if config.plotFigure:
+      plt.show()
+      plt.pause(0.001)
+    plt.close()
+
+def construct_environment(config, visualize_failure_sets=True):
   # == ARGS ==
   # == CONFIGURATION ==
   env_name = "dubins_car_img-v1"
@@ -166,89 +250,9 @@ def construct_environment(config):
   else:
     print("Type I Reach-Avoid Set")
   env.set_seed(config.randomSeed)
-  
-  # == Get and Plot max{l_x, g_x} ==
-  if config.plotFigure or config.storeFigure:
-    nx, ny = 51, 51
-    
-    v = np.zeros((nx, ny))
-    #l_x = np.zeros((nx, ny))
-    g_x = np.zeros((nx, ny))
-    xs = np.linspace(env.bounds[0, 0], env.bounds[0, 1], nx)
-    ys = np.linspace(env.bounds[1, 0], env.bounds[1, 1], ny)
 
-    it = np.nditer(v, flags=['multi_index'])
-    ###
-    idxs = []  
-    imgs = []
-    thetas = []
-    it = np.nditer(v, flags=["multi_index"])
-    while not it.finished:
-      idx = it.multi_index
-      x = xs[idx[0]]
-      y = ys[idx[1]]
-      theta = np.random.random()*2*np.pi
-      assert theta > 0 and theta < 2*np.pi
-      thetas.append(theta)
-      if env.car.use_wm:
-        imgs.append(env.capture_image(np.array([x, y, theta])))
-        idxs.append(idx)        
-      it.iternext()
-    idxs = np.array(idxs)
-    x_lin = xs[idxs[:,0]]
-    y_lin = ys[idxs[:,1]]
-    theta_lin = np.array(thetas)
-    
-    if config.gt_lx:
-      raise Exception('Not implemented')
-      g_x = env.car.gt_safety_margin(np.array([x_lin, y_lin]))
-    else:   
-      g_x, _, _ = env.car.get_latent(x_lin, y_lin, theta_lin, imgs)
-
-###
-    v[idxs[:, 0], idxs[:, 1]] = g_x
-    g_x = v
-
-    vmax = round(max(np.max(g_x), 0),1)
-    vmin = round(min(np.min(g_x), -vmax),1)
-    axStyle = env.get_axes()
-
-    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
-
-    ax = axes[0]
-    im = ax.imshow(
-        g_x.T, interpolation='none', extent=axStyle[0], origin="lower",
-        cmap="seismic", vmin=vmin, vmax=vmax, zorder=-1
-    )
-    cbar = fig.colorbar(
-        im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
-    )
-    cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=24)
-    ax.set_title(r'$g(x)$', fontsize=18)
-
-    ax = axes[1]
-    im = ax.imshow(
-        v.T > 0, interpolation='none', extent=axStyle[0], origin="lower",
-        cmap="seismic", vmin=-1, vmax=1, zorder=-1
-    )
-    cbar = fig.colorbar(
-        im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
-    )
-    cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=24)
-    ax.set_title(r'$v(x)$', fontsize=18)
-
-    for ax in axes:
-      env.plot_target_failure_set(ax=ax)
-      env.plot_formatting(ax=ax)
-
-    fig.tight_layout()
-    if config.storeFigure:
-      figurePath = os.path.join(figureFolder, 'env.png')
-      fig.savefig(figurePath)
-    if config.plotFigure:
-      plt.show()
-      plt.pause(0.001)
-    plt.close()
+  if visualize_failure_sets:
+    visualize_env_failure_sets(env, config, figureFolder)
 
   info = {
     "updatePeriod": updatePeriod,

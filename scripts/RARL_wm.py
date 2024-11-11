@@ -350,7 +350,8 @@ def evaluate_training(
   trainDict = {}
   trainDict['trainRecords'] = trainRecords
   trainDict['trainProgress'] = trainProgress
-  filePath = os.path.join(environment_info["outFolder"], 'train')
+  # savinig an early version of the results in case we crash later
+  save_obj(trainDict, os.path.join(environment_info["outFolder"], 'train_prelim'))
 
   # region: loss
   if config.plotFigure or config.storeFigure:
@@ -471,7 +472,7 @@ def evaluate_training(
     trainDict['resultMtx'] = resultMtx
     trainDict['actDistMtx'] = actDistMtx
 
-  save_obj(trainDict, filePath)
+  save_obj(trainDict, filePath = os.path.join(environment_info["outFolder"], 'train'))
 
 
 def RARL(config):
@@ -481,16 +482,6 @@ def RARL(config):
     print("\n== Warmup Q ==")
     warmup_Q(agent, env, environment_info)
 
-
-  # results, minVs, infos = env.plot_trajectories(
-  #     q_func=agent.Q_network,
-  #     num_rnd_traj=10,
-  #     save_dir='safe_rollouts.png',
-  #     return_infos=True,
-  #     enable_observation_feedback=True,
-  #     wait_for_all_metrics_to_predict_failure=True,
-  # )
-  # return 0
 
   print("\n== Training Information ==")
   trainRecords, trainProgress = agent.learn(
@@ -503,46 +494,55 @@ def RARL(config):
 
   evaluate_training(trainRecords, trainProgress, environment_info)
 
+def get_config(parse_args=True):
+  parser = argparse.ArgumentParser()
+  parser.add_argument("--configs", nargs="+")
+  parser.add_argument("--expt_name", type=str, default=None)
+  parser.add_argument("--resume_run", type=bool, default=False)
+  # environment parameters
+  config, remaining = parser.parse_known_args()
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--configs", nargs="+")
-    parser.add_argument("--expt_name", type=str, default=None)
-    parser.add_argument("--resume_run", type=bool, default=False)
-    # environment parameters
-    config, remaining = parser.parse_known_args()
+  if not config.resume_run:
+      curr_time = datetime.now().strftime("%m%d/%H%M%S")
+      config.expt_name = (
+          f"{curr_time}_{config.expt_name}" if config.expt_name else curr_time
+      )
+  else:
+      assert config.expt_name, "Need to provide experiment name to resume run."
 
-    if not config.resume_run:
-        curr_time = datetime.now().strftime("%m%d/%H%M%S")
-        config.expt_name = (
-            f"{curr_time}_{config.expt_name}" if config.expt_name else curr_time
-        )
-    else:
-        assert config.expt_name, "Need to provide experiment name to resume run."
+  yaml_parser = yaml.YAML(typ="safe", pure=True)
+  configs = yaml_parser.load(
+      (pathlib.Path(parent_dir) / "configs/config.yaml").read_text()
+  )
 
-    yaml = yaml.YAML(typ="safe", pure=True)
-    configs = yaml.load(
-        (pathlib.Path(sys.argv[0]).parent / "../configs/config.yaml").read_text()
-    )
+  name_list = ["defaults", *config.configs] if config.configs else ["defaults"]
 
-    name_list = ["defaults", *config.configs] if config.configs else ["defaults"]
-
-    defaults = {}
-    for name in name_list:
-        recursive_update(defaults, configs[name])
+  defaults = {}
+  for name in name_list:
+      recursive_update(defaults, configs[name])
+    
+  if parse_args:
     parser = argparse.ArgumentParser()
     print(defaults.keys())
     for key, value in sorted(defaults.items(), key=lambda x: x[0]):
         arg_type = tools.args_type(value)
         parser.add_argument(f"--{key}", type=arg_type, default=arg_type(value))
     final_config = parser.parse_args(remaining)
-
-    final_config.logdir = f"{final_config.logdir}/{config.expt_name}"
     #final_config.time_limit = HORIZONS[final_config.task.split("_")[-1]]
+  else:
+    # if not parsing args, return the defaults
+    final_config = argparse.Namespace(**defaults)
 
-    print("---------------------")
-    cprint(f"Experiment name: {config.expt_name}", "red", attrs=["bold"])
-    cprint(f"Task: {final_config.task}", "cyan", attrs=["bold"])
-    cprint(f"Logging to: {final_config.logdir}", "cyan", attrs=["bold"])
-    print("---------------------")
-    RARL(final_config)
+  final_config.logdir = f"{final_config.logdir}/{config.expt_name}"
+
+  print("---------------------")
+  cprint(f"Experiment name: {config.expt_name}", "red", attrs=["bold"])
+  cprint(f"Task: {final_config.task}", "cyan", attrs=["bold"])
+  cprint(f"Logging to: {final_config.logdir}", "cyan", attrs=["bold"])
+  print("---------------------")
+  return final_config
+
+
+if __name__ == "__main__":
+  config = get_config()
+  RARL(config)

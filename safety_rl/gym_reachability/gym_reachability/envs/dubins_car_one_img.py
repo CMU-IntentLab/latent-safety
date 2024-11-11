@@ -772,7 +772,7 @@ class DubinsCarOneEnvImg(gym.Env):
       "valueList": valueList,
       "gxList": gxList,
       "groundtruth_metrics": groundtruth_metrics,
-      "learned_metrics": learned_metrics
+      "learned_metrics": learned_metrics,
     }
     return traj, result, minV, info
 
@@ -1143,7 +1143,9 @@ class DubinsCarOneEnvImg(gym.Env):
   def plot_trajectories(
       self, q_func, T=100, num_rnd_traj=None, states=None, theta=None,
       toEnd=False, ax=None, c="y", lw=1.5, orientation=0, zorder=2,
-      enable_observation_feedback=False, save_dir=None
+      enable_observation_feedback=False,
+      wait_for_all_metrics_to_predict_failure=False,
+      save_dir=None, return_infos=False
   ):
     """Plots trajectories given the agent's Q-network.
 
@@ -1183,10 +1185,12 @@ class DubinsCarOneEnvImg(gym.Env):
         tmpStates.append(np.array([xtilde, ytilde, thetatilde]))
       states = tmpStates
 
-    trajectories, results, minVs = self.simulate_trajectories(
+    _simulation_output = self.simulate_trajectories(
         q_func, T=T, num_rnd_traj=num_rnd_traj, states=states, toEnd=toEnd,
-        enable_observation_feedback=enable_observation_feedback
+        enable_observation_feedback=enable_observation_feedback, return_infos=return_infos
     )
+    trajectories, results, minVs, infos = _simulation_output if return_infos else (*_simulation_output, None)
+
     if ax is None:
       ax = plt.gca()
     
@@ -1201,6 +1205,9 @@ class DubinsCarOneEnvImg(gym.Env):
 
     if save_dir is not None:
       plt.savefig(save_dir, bbox_inches='tight')
+
+    if return_infos:
+      return results, minVs, infos
 
     return results, minVs
 

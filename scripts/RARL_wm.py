@@ -49,8 +49,6 @@ from datetime import datetime
 from pathlib import Path
 from termcolor import cprint
 
-debugging_eval = True
-
 matplotlib.use('Agg')
 simplefilter(action='ignore', category=FutureWarning)
 timestr = time.strftime("%Y-%m-%d-%H_%M")
@@ -62,9 +60,8 @@ def recursive_update(base, update):
         else:
             base[key] = value
 
-def RARL(config):
+def construct_environment(config):
   # == ARGS ==
-
   # == CONFIGURATION ==
   env_name = "dubins_car_img-v1"
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -176,7 +173,7 @@ def RARL(config):
   env.set_seed(config.randomSeed)
   
   # == Get and Plot max{l_x, g_x} ==
-  if (config.plotFigure or config.storeFigure) and not debugging_eval:
+  if config.plotFigure or config.storeFigure:
     nx, ny = 51, 51
     
     v = np.zeros((nx, ny))
@@ -257,90 +254,108 @@ def RARL(config):
       plt.show()
       plt.pause(0.001)
     plt.close()
-  
+
+  info = {
+    "updatePeriod": updatePeriod,
+    "updatePeriodHalf": updatePeriodHalf,
+    "device": device,
+    "env_name": env_name,
+    "outFolder": outFolder,
+    "figureFolder": figureFolder,
+    "stateDim": stateDim,
+    "actionNum": actionNum,
+    "actionList": actionList,
+    "maxUpdates": maxUpdates,
+    "maxSteps": maxSteps,
+  }
+
+  return env, info
+
+def construct_agent(config, environment_info):
   # == Agent CONFIG ==
   print("\n== Agent Information ==")
   if config.annealing:
     GAMMA_END = 0.9999
-    EPS_PERIOD = int(updatePeriod / 10)
-    EPS_RESET_PERIOD = updatePeriod
+    EPS_PERIOD = int(environment_info["updatePeriod"] / 10)
+    EPS_RESET_PERIOD = environment_info["updatePeriod"]
   else:
     GAMMA_END = config.gamma
-    EPS_PERIOD = updatePeriod
-    EPS_RESET_PERIOD = maxUpdates
+    EPS_PERIOD = environment_info["updatePeriod"]
+    EPS_RESET_PERIOD = environment_info["maxUpdates"]
 
   CONFIG = dqnConfig(
-      DEVICE=device, ENV_NAME=env_name, SEED=config.randomSeed,
-      MAX_UPDATES=maxUpdates, MAX_EP_STEPS=maxSteps, BATCH_SIZE=64,
-      MEMORY_CAPACITY=config.memoryCapacity, ARCHITECTURE=config.architecture,
-      ACTIVATION=config.actType, GAMMA=config.gamma, GAMMA_PERIOD=updatePeriod,
-      GAMMA_END=GAMMA_END, EPS_PERIOD=EPS_PERIOD, EPS_DECAY=0.7,
-      EPS_RESET_PERIOD=EPS_RESET_PERIOD, LR_C=config.learningRate,
-      LR_C_PERIOD=updatePeriod, LR_C_DECAY=0.8, MAX_MODEL=50
+      DEVICE=environment_info["device"],
+      ENV_NAME=environment_info["env_name"],
+      SEED=config.randomSeed,
+      MAX_UPDATES=environment_info["maxUpdates"],
+      MAX_EP_STEPS=environment_info["maxSteps"],
+      BATCH_SIZE=64,
+      MEMORY_CAPACITY=config.memoryCapacity,
+      ARCHITECTURE=config.architecture,
+      ACTIVATION=config.actType,
+      GAMMA=config.gamma,
+      GAMMA_PERIOD=environment_info["updatePeriod"],
+      GAMMA_END=GAMMA_END,
+      EPS_PERIOD=EPS_PERIOD,
+      EPS_DECAY=0.7,
+      EPS_RESET_PERIOD=EPS_RESET_PERIOD,
+      LR_C=config.learningRate,
+      LR_C_PERIOD=environment_info["updatePeriod"],
+      LR_C_DECAY=0.8,
+      MAX_MODEL=50
   )
 
   # == AGENT ==
-  dimList = [stateDim] + list(CONFIG.ARCHITECTURE) + [actionNum]
+  dimList = [environment_info["stateDim"]] + list(CONFIG.ARCHITECTURE) + [environment_info["actionNum"]]
   
   agent = DDQNSingle(
-      CONFIG, actionNum, actionList, dimList=dimList, mode=config.mode,
+      CONFIG, environment_info["actionNum"],
+      environment_info["actionList"],
+      dimList=dimList,
+      mode=config.mode,
       terminalType=config.terminalType
   )
-  print("We want to use: {}, and Agent uses: {}".format(device, agent.device))
+  print("We want to use: {}, and Agent uses: {}".format(environment_info["device"], agent.device))
   print("Critic is using cuda: ", next(agent.Q_network.parameters()).is_cuda)
 
-  vmin = -1
-  vmax = 1
-  if config.warmup and not debugging_eval:
-    print("\n== Warmup Q ==")
-    lossList = agent.initQ(
-        env, config.warmupIter, outFolder, num_warmup_samples=200, vmin=vmin,
-        vmax=vmax, plotFigure=config.plotFigure, storeFigure=config.storeFigure
-    )
+  return agent
 
-    if config.plotFigure or config.storeFigure:
-      fig, ax = plt.subplots(1, 1, figsize=(4, 4))
-      tmp = np.arange(25, config.warmupIter)
-      #tmp = np.arange(config.warmupIter)
-      ax.plot(tmp, lossList[tmp], 'b-')
-      ax.set_xlabel('Iteration', fontsize=18)
-      ax.set_ylabel('Loss', fontsize=18)
-      plt.tight_layout()
-
-      if config.storeFigure:
-        figurePath = os.path.join(figureFolder, 'initQ_Loss.png')
-        fig.savefig(figurePath)
-      if config.plotFigure:
-        plt.show()
-        plt.pause(0.001)
-      plt.close()
-
-  results, minVs, infos = env.plot_trajectories(
-      q_func=agent.Q_network,
-      num_rnd_traj=10,
-      save_dir='safe_rollouts.png',
-      return_infos=True,
-      enable_observation_feedback=True,
-      wait_for_all_metrics_to_predict_failure=True,
-  )
-
-  return 0
-
-
-  print("\n== Training Information ==")
-  vmin = -1
-  vmax = 1
-  trainRecords, trainProgress = agent.learn(
-      env, MAX_UPDATES=maxUpdates, MAX_EP_STEPS=maxSteps, warmupQ=False,
-      doneTerminate=True, vmin=vmin, vmax=vmax, showBool=True,
-      checkPeriod=config.checkPeriod, outFolder=outFolder,
+def warmup_Q(agent, env, environment_info):
+  lossList = agent.initQ(
+      env, config.warmupIter, environment_info["outFolder"],
+      num_warmup_samples=200, vmin=environment_info["vmin"],
+      vmax=environment_info["vmax"],
       plotFigure=config.plotFigure, storeFigure=config.storeFigure
   )
 
+  if config.plotFigure or config.storeFigure:
+    fig, ax = plt.subplots(1, 1, figsize=(4, 4))
+    tmp = np.arange(25, config.warmupIter)
+    #tmp = np.arange(config.warmupIter)
+    ax.plot(tmp, lossList[tmp], 'b-')
+    ax.set_xlabel('Iteration', fontsize=18)
+    ax.set_ylabel('Loss', fontsize=18)
+    plt.tight_layout()
+
+    if config.storeFigure:
+      figurePath = os.path.join(environment_info["figureFolder"], 'initQ_Loss.png')
+      fig.savefig(figurePath)
+    if config.plotFigure:
+      plt.show()
+      plt.pause(0.001)
+    plt.close()
+
+def evaluate_training(
+    trainRecords,
+    trainProgress, 
+    env,
+    agent,
+    environment_info
+  ):
   trainDict = {}
   trainDict['trainRecords'] = trainRecords
   trainDict['trainProgress'] = trainProgress
-  filePath = os.path.join(outFolder, 'train')
+  filePath = os.path.join(environment_info["outFolder"], 'train')
 
   # region: loss
   if config.plotFigure or config.storeFigure:
@@ -350,10 +365,10 @@ def RARL(config):
     ax = axes[0]
     ax.plot(data, 'b:')
     ax.set_xlabel('Iteration (x 1e5)', fontsize=18)
-    ax.set_xticks(np.linspace(0, maxUpdates, 5))
-    ax.set_xticklabels(np.linspace(0, maxUpdates, 5) / 1e5)
+    ax.set_xticks(np.linspace(0, environment_info["maxUpdates"], 5))
+    ax.set_xticklabels(np.linspace(0, environment_info["maxUpdates"], 5) / 1e5)
     ax.set_title('loss_critic', fontsize=18)
-    ax.set_xlim(left=0, right=maxUpdates)
+    ax.set_xlim(left=0, right=environment_info["maxUpdates"])
 
     data = trainProgress[:, 0]
     ax = axes[1]
@@ -367,7 +382,7 @@ def RARL(config):
 
     fig.tight_layout()
     if config.storeFigure:
-      figurePath = os.path.join(figureFolder, 'train_loss_success.png')
+      figurePath = os.path.join(environment_info["figureFolder"], 'train_loss_success.png')
       fig.savefig(figurePath)
     if config.plotFigure:
       plt.show()
@@ -379,7 +394,7 @@ def RARL(config):
     idx = np.argmax(trainProgress[:, 0]) + 1
     successRate = np.amax(trainProgress[:, 0])
     print('We pick model with success rate-{:.3f}'.format(successRate))
-    agent.restore(idx * config.checkPeriod, outFolder)
+    agent.restore(idx * config.checkPeriod, environment_info["outFolder"])
 
     nx = 41
     ny = nx
@@ -416,7 +431,7 @@ def RARL(config):
     ax = axes[2]
     im = ax.imshow(
         actDistMtx.T, interpolation='none', extent=axStyle[0], origin="lower",
-        cmap='seismic', vmin=0, vmax=actionNum - 1, zorder=-1
+        cmap='seismic', vmin=0, vmax=environment_info["actionNum"] - 1, zorder=-1
     )
     ax.set_xlabel('Action', fontsize=24)
 
@@ -437,7 +452,7 @@ def RARL(config):
     v = env.get_value(agent.Q_network, theta=0, nx=nx, ny=ny)
     im = ax.imshow(
         v.T, interpolation='none', extent=axStyle[0], origin="lower",
-        cmap='seismic', vmin=vmin, vmax=vmax, zorder=-1
+        cmap='seismic', vmin=environment_info["vmin"], vmax=environment_info["vmax"], zorder=-1
     )
     CS = ax.contour(
         xs, ys, v.T, levels=[0], colors='k', linewidths=2, linestyles='dashed'
@@ -451,7 +466,7 @@ def RARL(config):
 
     fig.tight_layout()
     if config.storeFigure:
-      figurePath = os.path.join(figureFolder, 'value_rollout_action.png')
+      figurePath = os.path.join(environment_info["figureFolder"], 'value_rollout_action.png')
       fig.savefig(figurePath)
     if config.plotFigure:
       plt.show()
@@ -462,6 +477,36 @@ def RARL(config):
     trainDict['actDistMtx'] = actDistMtx
 
   save_obj(trainDict, filePath)
+
+
+def RARL(config):
+  env, environment_info = construct_environment(config)
+  agent = construct_agent(config, environment_info)
+  if config.warmup:
+    print("\n== Warmup Q ==")
+    warmup_Q(agent, env, environment_info)
+
+
+  # results, minVs, infos = env.plot_trajectories(
+  #     q_func=agent.Q_network,
+  #     num_rnd_traj=10,
+  #     save_dir='safe_rollouts.png',
+  #     return_infos=True,
+  #     enable_observation_feedback=True,
+  #     wait_for_all_metrics_to_predict_failure=True,
+  # )
+  # return 0
+
+  print("\n== Training Information ==")
+  trainRecords, trainProgress = agent.learn(
+      env, MAX_UPDATES=environment_info["maxUpdates"],
+      MAX_EP_STEPS=environment_info["axSteps"], warmupQ=False,
+      doneTerminate=True, vmin=environment_info["vmin"], vmax=environment_info["vmax"], showBool=True,
+      checkPeriod=config.checkPeriod, outFolder=environment_info["outFolder"],
+      plotFigure=config.plotFigure, storeFigure=config.storeFigure
+  )
+
+  evaluate_training(trainRecords, trainProgress, environment_info)
 
 
 if __name__ == "__main__":

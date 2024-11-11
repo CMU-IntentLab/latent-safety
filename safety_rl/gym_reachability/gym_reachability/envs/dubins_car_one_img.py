@@ -779,6 +779,7 @@ class DubinsCarOneEnvImg(gym.Env):
   def simulate_trajectories(
       self, q_func, T=10, num_rnd_traj=None, states=None, theta=0, toEnd=False, enable_observation_feedback=False,
       wait_for_all_metrics_to_predict_failure=False, return_infos=False,
+      position_gridsize = 51,
   ):
     """
     Simulates the trajectories. If the states are not provided, we pick the
@@ -806,7 +807,7 @@ class DubinsCarOneEnvImg(gym.Env):
     trajectories = []
 
     if states is None:
-      nx = 3
+      nx = position_gridsize
       ny = nx
       xs = np.linspace(self.bounds[0, 0], self.bounds[0, 1], nx)
       ys = np.linspace(self.bounds[1, 0], self.bounds[1, 1], ny)
@@ -1146,7 +1147,8 @@ class DubinsCarOneEnvImg(gym.Env):
       toEnd=False, ax=None, c="y", lw=1.5, orientation=0, zorder=2,
       enable_observation_feedback=False,
       wait_for_all_metrics_to_predict_failure=False,
-      save_dir=None, return_infos=False
+      save_dir=None, return_infos=False,
+      position_gridsize=None,
   ):
     """Plots trajectories given the agent's Q-network.
 
@@ -1190,7 +1192,8 @@ class DubinsCarOneEnvImg(gym.Env):
         q_func, T=T, num_rnd_traj=num_rnd_traj, states=states, theta=theta, toEnd=toEnd,
         enable_observation_feedback=enable_observation_feedback,
         wait_for_all_metrics_to_predict_failure=wait_for_all_metrics_to_predict_failure,
-        return_infos=return_infos
+        return_infos=return_infos,
+        position_gridsize=position_gridsize,
     )
     trajectories, results, minVs, infos = _simulation_output if return_infos else (*_simulation_output, None)
 

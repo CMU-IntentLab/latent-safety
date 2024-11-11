@@ -24,9 +24,9 @@ def load_best_agent(config):
     agent.restore(restore_idx, os.path.join(project_root, environment_info["outFolder"]))
     return agent
 
-def collect_rollout_data(env, agent, angle_grid_size, enable_observation_feedback=True):
+def collect_rollout_data(env, agent, position_gridsize, angle_gridsize, enable_observation_feedback=True):
     all_angle_infos = {}
-    thetas = np.linspace(0, 2*math.pi, angle_grid_size, endpoint=False)
+    thetas = np.linspace(0, 2*math.pi, angle_gridsize, endpoint=False)
     rollout_eval_folder = os.path.join(project_root, environment_info["outFolder"], "rollout_eval")
     os.makedirs(rollout_eval_folder, exist_ok=True)
     for theta in thetas:
@@ -36,11 +36,11 @@ def collect_rollout_data(env, agent, angle_grid_size, enable_observation_feedbac
             num_rnd_traj=10,
             theta = theta,
             # convert to degrees for filename
-            # save_dir=f'safe_rollouts_theta{theta_deg:.0f}deg.png',
             save_dir=os.path.join(rollout_eval_folder, f'safe_rollouts_theta{theta_deg:.0f}deg.png'),
             return_infos=True,
             enable_observation_feedback=enable_observation_feedback,
             wait_for_all_metrics_to_predict_failure=True,
+            position_gridsize=position_gridsize,
         )
         all_angle_infos[theta] = infos
 
@@ -54,5 +54,5 @@ env, environment_info = RARL_wm.construct_environment(config)
 agent = load_best_agent(config)
 
 # %%
-collect_rollout_data(env, agent, angle_grid_size=2)
+collect_rollout_data(env, agent, position_gridsize = 2, angle_gridsize=2)
 # %%

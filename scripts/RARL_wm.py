@@ -38,15 +38,10 @@ import model_based_irl_torch.dreamer.models as models
 import model_based_irl_torch.dreamer.tools as tools
 
 import argparse
-import collections
-import copy
-import warnings
-import functools
 import time
 import pathlib
 import sys
 from datetime import datetime
-from pathlib import Path
 from termcolor import cprint
 
 matplotlib.use('Agg')

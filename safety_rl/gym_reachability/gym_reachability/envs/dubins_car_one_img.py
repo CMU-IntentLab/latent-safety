@@ -777,8 +777,8 @@ class DubinsCarOneEnvImg(gym.Env):
     return traj, result, minV, info
 
   def simulate_trajectories(
-      self, q_func, T=10, num_rnd_traj=None, states=None, toEnd=False, enable_observation_feedback=False,
-      wait_for_all_metrics_to_predict_failure=False, return_infos=False
+      self, q_func, T=10, num_rnd_traj=None, states=None, theta=0, toEnd=False, enable_observation_feedback=False,
+      wait_for_all_metrics_to_predict_failure=False, return_infos=False,
   ):
     """
     Simulates the trajectories. If the states are not provided, we pick the
@@ -813,6 +813,7 @@ class DubinsCarOneEnvImg(gym.Env):
       results = np.empty((nx, ny), dtype=int)
       minVs = np.empty((nx, ny), dtype=float)
       infos = {}
+      theta = 0 if theta is None else theta
 
       it = np.nditer(results, flags=["multi_index"])
       print()
@@ -821,9 +822,9 @@ class DubinsCarOneEnvImg(gym.Env):
         print(idx, end="\r")
         x = xs[idx[0]]
         y = ys[idx[1]]
-        state = np.array([x, y, 0.0])
+        state = np.array([x, y, theta])
         traj, result, minV, info = self.simulate_one_trajectory(
-            q_func, T=T, state=state, toEnd=toEnd, enable_observation_feedback=enable_observation_feedback,
+            q_func, T=T, state=state, theta=theta, toEnd=toEnd, enable_observation_feedback=enable_observation_feedback,
             wait_for_all_metrics_to_predict_failure=wait_for_all_metrics_to_predict_failure
         )
         trajectories.append((traj))
@@ -839,7 +840,7 @@ class DubinsCarOneEnvImg(gym.Env):
       minVs = np.empty(shape=(len(states),), dtype=float)
       for idx, state in enumerate(states):
         traj, result, minV, info = self.simulate_one_trajectory(
-            q_func, T=T, state=state, toEnd=toEnd
+            q_func, T=T, state=state, toEnd=toEnd,
         )
         trajectories.append(traj)
         results[idx] = result
@@ -1186,8 +1187,10 @@ class DubinsCarOneEnvImg(gym.Env):
       states = tmpStates
 
     _simulation_output = self.simulate_trajectories(
-        q_func, T=T, num_rnd_traj=num_rnd_traj, states=states, toEnd=toEnd,
-        enable_observation_feedback=enable_observation_feedback, return_infos=return_infos
+        q_func, T=T, num_rnd_traj=num_rnd_traj, states=states, theta=theta, toEnd=toEnd,
+        enable_observation_feedback=enable_observation_feedback,
+        wait_for_all_metrics_to_predict_failure=wait_for_all_metrics_to_predict_failure,
+        return_infos=return_infos
     )
     trajectories, results, minVs, infos = _simulation_output if return_infos else (*_simulation_output, None)
 

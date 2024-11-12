@@ -4,6 +4,7 @@ import RARL_wm
 import os
 import math
 import numpy as np
+import pandas as pd
 from safety_rl.RARL.utils import save_obj, load_obj
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -31,13 +32,14 @@ def get_grid_value_for_state(env, grid, x, y, theta):
     """
     nx = grid.shape[0]
     ny = grid.shape[1]
+    ntheta = grid.shape[2]
     dx = (env.bounds[0, 1] - env.bounds[0, 0]) / nx
     dy = (env.bounds[1, 1] - env.bounds[1, 0]) / ny
     dtheta = 2*np.pi / grid.shape[2]
-    x_idx = int((x - env.bounds[0, 0]) / dx)
-    y_idx = int((y - env.bounds[1, 0]) / dy)
+    x_idx = min(int((x - env.bounds[0, 0]) / dx), nx-1)
+    y_idx = min(int((y - env.bounds[1, 0]) / dy), ny-1)
     # for theta, make sure to wrap the angle to 0-2pi
-    theta_idx = int((theta % (2*np.pi)) / dtheta)
+    theta_idx = min(int((theta % (2*np.pi)) / dtheta), ntheta-1)
     return grid[x_idx, y_idx, theta_idx]
 
 def collect_rollout_data(env, agent, position_gridsize, angle_gridsize, enable_observation_feedback=True):
@@ -47,6 +49,7 @@ def collect_rollout_data(env, agent, position_gridsize, angle_gridsize, enable_o
     os.makedirs(rollout_eval_folder, exist_ok=True)
     for theta_idx, theta in enumerate(thetas):
         theta_deg = math.degrees(theta)
+        print(f"Collecting rollouts for theta = {theta_deg:.0f} degrees; {theta_idx+1}/{angle_gridsize}")
         _, _, infos = env.plot_trajectories(
             q_func=agent.Q_network,
             num_rnd_traj=10,
@@ -64,57 +67,51 @@ def collect_rollout_data(env, agent, position_gridsize, angle_gridsize, enable_o
     return rollout_data
 
 def evaluate_rollout_data(rollout_data, ground_truth_brt):
-    evaluated_rollout_data = {}
-    stats = {
-        "total" : 0,
-        "infeasible": 0,
-        "safe": 0,
-        "unsafe": 0,
-        "false_positive": 0,
-    }
+    evaluated_rollout_data = []
 
     for theta_data in rollout_data.values():
         for rollout_info in theta_data.values():
+            # extract relevant information from the rollout
+            # ground truth metrics
             ground_truth_metrics = rollout_info["groundtruth_metrics"]
-            x, y, theta = ground_truth_metrics["traj"][0]
-            learned_metrics = rollout_info["learned_metrics"]
-            # find the first time step where the value is negative
+            ground_truth_initial_state = ground_truth_metrics["traj"][0]
+            ground_truth_initial_value = get_grid_value_for_state(env, ground_truth_brt, ground_truth_initial_state[0], ground_truth_initial_state[1], ground_truth_initial_state[2])
+            ground_truth_failure_margin = ground_truth_metrics["minV"]
             ground_truth_failure_time = next(
                 (idx for idx, value in enumerate(ground_truth_metrics["valueList"]) if value < 0), None
             )
+            # learned metrics
+            learned_metrics = rollout_info["learned_metrics"]
             learned_failure_time = next(
                 (idx for idx, value in enumerate(learned_metrics["valueList"]) if value < 0), None
             )
-            evaluation = {
-                "ground_truth_initial_value": get_grid_value_for_state(env, ground_truth_brt, x, y, theta),
-                "ground_truth_failure_margin": ground_truth_metrics["minV"],
-                "ground_truth_failure_time": ground_truth_failure_time,
-                "learned_failure_margin": learned_metrics["minV"],
-                "learned_failure_time": learned_failure_time,
-            }
-            evaluated_rollout_data[(x, y, theta)] = evaluation
+            learned_failure_margin = learned_metrics["minV"]
 
-            # book-keeping
-            stats["total"] += 1
-            is_infeasible = evaluation["ground_truth_initial_value"] < 0
-            if is_infeasible:
-                stats["infeasible"] += 1
-                continue
-            is_safe = evaluation["ground_truth_failure_margin"] > 0
-            if is_safe:
-                assert ground_truth_failure_time is None
-                stats["safe"] += 1
+            # high-level classification of the rollout according to main features
+            is_feasible = ground_truth_initial_value >= 0
+            if is_feasible:
+                is_safe = ground_truth_failure_margin >= 0
+                is_false_positive = (learned_failure_time is not None) and (learned_failure_time < ground_truth_failure_time)
             else:
-                assert ground_truth_failure_time is not None
-                stats["unsafe"] += 1
-            # check if the learned classifier predicted failure despite the system being fine
-            if (learned_failure_time is not None) and (learned_failure_time < ground_truth_failure_time):
-                stats["false_positive"] += 1
+                is_safe = None
+                is_false_positive = None
 
-    assert stats["total"] == stats["infeasible"] + stats["safe"] + stats["unsafe"]
+            # aggregate all the data
+            evaluated_rollout_data.append(
+                {
+                    "ground_truth_initial_value": ground_truth_initial_value,
+                    "ground_truth_failure_margin": ground_truth_failure_margin,
+                    "ground_truth_failure_time": ground_truth_failure_time,
+                    "learned_failure_time": learned_failure_time,
+                    "learned_failure_margin": learned_failure_margin,
+                    "is_feasible": is_feasible,
+                    "is_safe": is_safe,
+                    "is_false_positive": is_false_positive,
+                }
+            )
 
-    return stats, evaluated_rollout_data
 
+    return pd.DataFrame(evaluated_rollout_data)
 
 #%% setup
 config = RARL_wm.get_config(parse_args=False)
@@ -122,9 +119,11 @@ env, environment_info = RARL_wm.construct_environment(config, visualize_failure_
 agent = load_best_agent(config)
 ground_truth_brt = np.load(config.grid_path)
 
-# %%
-# rollout_data = collect_rollout_data(env, agent, position_gridsize = 1, angle_gridsize=1)
+# %% 
+# if you skip this cell, the cells below will just load the data from disk
+rollout_data = collect_rollout_data(env, agent, position_gridsize = 51, angle_gridsize=12)
 
 # %%
 rollout_data = load_obj(os.path.join(project_root, environment_info["outFolder"], "rollout_eval", "rollout_data"))
-stats, evaluate_rollout_data = evaluate_rollout_data(rollout_data, ground_truth_brt)
+evaluated_rollouts = evaluate_rollout_data(rollout_data, ground_truth_brt)
+# %%

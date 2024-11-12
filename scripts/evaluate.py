@@ -17,6 +17,7 @@ if the_ipython_instance is not None:
     the_ipython_instance.magic("autoreload 2")
     the_ipython_instance.magic("matplotlib inline")
 
+
 # %% functions
 def load_best_agent(config):
     agent = RARL_wm.construct_agent(config, environment_info)
@@ -145,6 +146,7 @@ def evaluate_rollout_data(rollout_data, ground_truth_brt):
 
     return pd.DataFrame(evaluated_rollout_data)
 
+
 def visualize_evaluated_rollout_stats(evaluated_rollouts, title):
     # create a sunburst chart of the results
     # https://plotly.com/python/sunburst-charts/
@@ -167,7 +169,11 @@ def visualize_evaluated_rollout_stats(evaluated_rollouts, title):
         path=["feasibility", "safety", "classification"],
         title=title,
         color="safety",
-        color_discrete_map={"safe": "lightgreen", "unsafe": "orange", "(?)": "lightblue"},
+        color_discrete_map={
+            "safe": "lightgreen",
+            "unsafe": "orange",
+            "(?)": "lightblue",
+        },
     )
     fig.update_traces(textinfo="label+value")
     # set root color to white
@@ -189,19 +195,30 @@ in_distribution_output_folder = os.path.join(
     project_root, environment_info["outFolder"], "in_distribution_rollout_eval"
 )
 in_distribution_output_prefix = "in_distribution_"
-in_distribution_data_path = os.path.join(in_distribution_output_folder, in_distribution_output_prefix + "rollout_data")
+in_distribution_data_path = os.path.join(
+    in_distribution_output_folder, in_distribution_output_prefix + "rollout_data"
+)
 # --- out-of-distribution evaluation setup ---
 # TODO
 
 # %% in_distribution rollout data collection
 ## if you skip this cell, the cells below will just load the data from disk
-in_distribution_rollout_data = collect_rollout_data(in_distribution_env, agent, position_gridsize=3, angle_gridsize=3, output_folder=in_distribution_output_folder, output_prefix=in_distribution_output_prefix)
+in_distribution_rollout_data = collect_rollout_data(
+    in_distribution_env,
+    agent,
+    position_gridsize=51,
+    angle_gridsize=12,
+    output_folder=in_distribution_output_folder,
+    output_prefix=in_distribution_output_prefix,
+)
 save_obj(in_distribution_rollout_data, in_distribution_data_path)
 
 
 # %% in_distribution data plotting
-in_distribution_rollout_data = load_obj(
-    in_distribution_data_path
+in_distribution_rollout_data = load_obj(in_distribution_data_path)
+evaluated_rollouts = evaluate_rollout_data(
+    in_distribution_rollout_data, ground_truth_brt
 )
-evaluated_rollouts = evaluate_rollout_data(in_distribution_rollout_data, ground_truth_brt)
-visualize_evaluated_rollout_stats(evaluated_rollouts, title = "In-Distribution Rollout Evaluation")
+visualize_evaluated_rollout_stats(
+    evaluated_rollouts, title="In-Distribution Rollout Evaluation"
+)

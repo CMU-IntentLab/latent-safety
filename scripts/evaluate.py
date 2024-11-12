@@ -206,8 +206,8 @@ in_distribution_data_path = os.path.join(
 in_distribution_rollout_data = collect_rollout_data(
     in_distribution_env,
     agent,
-    position_gridsize=51,
-    angle_gridsize=12,
+    position_gridsize=41,
+    angle_gridsize=3,
     output_folder=in_distribution_output_folder,
     output_prefix=in_distribution_output_prefix,
 )

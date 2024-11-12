@@ -92,7 +92,7 @@ def evaluate_rollout_data(rollout_data, ground_truth_brt):
             ground_truth_metrics = rollout_info["groundtruth_metrics"]
             ground_truth_initial_state = ground_truth_metrics["traj"][0]
             ground_truth_initial_value = get_grid_value_for_state(
-                env, ground_truth_brt, *ground_truth_initial_state
+                in_distribution_env, ground_truth_brt, *ground_truth_initial_state
             )
             ground_truth_failure_margin = ground_truth_metrics["minV"]
             ground_truth_failure_time = next(
@@ -176,26 +176,26 @@ def visualize_evaluated_rollout_stats(evaluated_rollouts, title):
 
 
 # %% setup
+# --- base setup
 config = RARL_wm.get_config(parse_args=False)
-env, environment_info = RARL_wm.construct_environment(
-    config, visualize_failure_sets=False
-)
 agent = load_best_agent(config)
 ground_truth_brt = np.load(config.grid_path)
 
-#%% experiment configs
-# --- in-distribution evaluation ---
+# --- in-distribution evaluation setup ---
+in_distribution_env, environment_info = RARL_wm.construct_environment(
+    config, visualize_failure_sets=False
+)
 in_distribution_output_folder = os.path.join(
     project_root, environment_info["outFolder"], "in_distribution_rollout_eval"
 )
 in_distribution_output_prefix = "in_distribution_"
 in_distribution_data_path = os.path.join(in_distribution_output_folder, in_distribution_output_prefix + "rollout_data")
-# --- out-of-distribution evaluation ----
+# --- out-of-distribution evaluation setup ---
 # TODO
 
 # %% in_distribution rollout data collection
 ## if you skip this cell, the cells below will just load the data from disk
-in_distribution_rollout_data = collect_rollout_data(env, agent, position_gridsize=3, angle_gridsize=3, output_folder=in_distribution_output_folder, output_prefix=in_distribution_output_prefix)
+in_distribution_rollout_data = collect_rollout_data(in_distribution_env, agent, position_gridsize=3, angle_gridsize=3, output_folder=in_distribution_output_folder, output_prefix=in_distribution_output_prefix)
 save_obj(in_distribution_rollout_data, in_distribution_data_path)
 
 
@@ -204,4 +204,4 @@ in_distribution_rollout_data = load_obj(
     in_distribution_data_path
 )
 evaluated_rollouts = evaluate_rollout_data(in_distribution_rollout_data, ground_truth_brt)
-visualize_evaluated_rollout_stats(evaluated_rollouts, title = "in_distribution Rollout Evaluation")
+visualize_evaluated_rollout_stats(evaluated_rollouts, title = "In-Distribution Rollout Evaluation")

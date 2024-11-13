@@ -35,26 +35,32 @@ def load_best_agent(config, environment_info):
 def compute_global_confusion_matrix(env, ground_truth_brt, q_func):
     nx = ground_truth_brt.shape[0]
     ny = ground_truth_brt.shape[1]
-
     # sub-sample theta indices to reduce computation
-    theta_indices = np.linspace(0, ground_truth_brt.shape[2] - 1, 10, dtype=int)
-
+    theta_indices = np.linspace(0, ground_truth_brt.shape[2] - 1, 3, dtype=int)
     slices = []
-
     for theta_idx in theta_indices:
         ground_truth_brt_slice = ground_truth_brt[:, :, theta_idx]
         # map index back to angle
         theta = theta_idx * 2 * np.pi / ground_truth_brt.shape[2]
-        slice_values, slice_tp, slice_tn, slice_fp, slice_fn = env.get_value(
-            q_func, theta=theta, nx=nx, ny=ny, grid = ground_truth_brt_slice
+        slice = env.get_value(
+            q_func, theta=theta, nx=nx, ny=ny
         )
-        slices.append({
-            "values": slice_values,
-            "tp": slice_tp,
-            "tn": slice_tn,
-            "fp": slice_fp,
-            "fn": slice_fn,
-        })
+        slices.append(slice)
+
+    #%%
+    v_nn = np.stack(slices, axis=2)
+    v_grid = ground_truth_brt[:, :, theta_indices]
+    tn,tp,fn,fp = env.confusion(v_nn, v_grid)
+    print(f"True Negatives: {tn}")
+    print(f"True Positives: {tp}")
+    print(f"False Negatives: {fn}")
+    print(f"False Positives: {fp}")
+    return {
+        "tn": tn,
+        "tp": tp,
+        "fn": fn,
+        "fp": fp
+    }
 
 def get_grid_value_for_state(env, grid, x, y, theta):
     """
@@ -227,6 +233,12 @@ in_distribution_output_prefix = "in_distribution_"
 in_distribution_data_path = os.path.join(
     in_distribution_output_folder, in_distribution_output_prefix + "rollout_data"
 )
+
+# %% in-distribution global confusion matrix
+in_distribution_global_confusion_matrix = compute_global_confusion_matrix(
+    in_distribution_env, ground_truth_brt, agent.Q_network
+)
+
 # --- in-distribution open-loop evaluation setup ---
 in_distribution_open_loop_output_folder = os.path.join(
     project_root,
@@ -238,50 +250,47 @@ in_distribution_open_loop_data_path = os.path.join(
     in_distribution_open_loop_output_folder,
     in_distribution_open_loop_output_prefix + "rollout_data",
 )
-# 
-# # %% in_distribution rollout data collection with feedback
-# in_distribution_rollout_data = collect_rollout_data(
-#     in_distribution_env,
-#     agent,
-#     position_gridsize=position_gridsize,
-#     angle_gridsize=angle_gridsize,
-#     output_folder=in_distribution_output_folder,
-#     output_prefix=in_distribution_output_prefix,
-# )
-# save_obj(in_distribution_rollout_data, in_distribution_data_path)
-# 
-# # %% in_distribution rollout data collection in open-loop (no observation feedback)
-# # if you skip this cell, the cells below will just load the data from disk
-# in_distribution_open_loop_rollout_data = collect_rollout_data(
-#     in_distribution_env,
-#     agent,
-#     position_gridsize=position_gridsize,
-#     angle_gridsize=angle_gridsize,
-#     output_folder=in_distribution_open_loop_output_folder,
-#     output_prefix=in_distribution_open_loop_output_prefix,
-#     enable_observation_feedback=False,
-# )
-# save_obj(in_distribution_open_loop_rollout_data, in_distribution_open_loop_data_path)
-# 
-# # %% in_distribution data plotting
-# in_distribution_rollout_data = load_obj(in_distribution_data_path)
-# evaluated_rollouts = evaluate_rollout_data(
-#     in_distribution_rollout_data, ground_truth_brt
-# )
-# visualize_evaluated_rollout_stats(
-#     evaluated_rollouts, title="In-Distribution Rollout Evaluation"
-# )
-# 
-# # %% in_distribution data plotting in open-loop
-# in_distribution_open_loop_rollout_data = load_obj(in_distribution_open_loop_data_path)
-# evaluated_open_loop_rollouts = evaluate_rollout_data(
-#     in_distribution_open_loop_rollout_data, ground_truth_brt
-# )
-# # %%
-# visualize_evaluated_rollout_stats(
-#     evaluated_open_loop_rollouts,
-#     title="In-Distribution Open-Loop Rollout Evaluation",
-# )
 
-#%%
-compute_global_confusion_matrix(in_distribution_env, ground_truth_brt, agent.Q_network)
+# %% in_distribution rollout data collection with feedback
+in_distribution_rollout_data = collect_rollout_data(
+    in_distribution_env,
+    agent,
+    position_gridsize=position_gridsize,
+    angle_gridsize=angle_gridsize,
+    output_folder=in_distribution_output_folder,
+    output_prefix=in_distribution_output_prefix,
+)
+save_obj(in_distribution_rollout_data, in_distribution_data_path)
+
+# %% in_distribution data plotting
+in_distribution_rollout_data = load_obj(in_distribution_data_path)
+evaluated_rollouts = evaluate_rollout_data(
+    in_distribution_rollout_data, ground_truth_brt
+)
+visualize_evaluated_rollout_stats(
+    evaluated_rollouts, title="In-Distribution Rollout Evaluation"
+)
+
+# %% in_distribution rollout data collection in open-loop (no observation feedback)
+# if you skip this cell, the cells below will just load the data from disk
+in_distribution_open_loop_rollout_data = collect_rollout_data(
+    in_distribution_env,
+    agent,
+    position_gridsize=position_gridsize,
+    angle_gridsize=angle_gridsize,
+    output_folder=in_distribution_open_loop_output_folder,
+    output_prefix=in_distribution_open_loop_output_prefix,
+    enable_observation_feedback=False,
+)
+save_obj(in_distribution_open_loop_rollout_data, in_distribution_open_loop_data_path)
+
+# %% in_distribution data plotting in open-loop
+in_distribution_open_loop_rollout_data = load_obj(in_distribution_open_loop_data_path)
+evaluated_open_loop_rollouts = evaluate_rollout_data(
+    in_distribution_open_loop_rollout_data, ground_truth_brt
+)
+# %%
+visualize_evaluated_rollout_stats(
+    evaluated_open_loop_rollouts,
+    title="In-Distribution Open-Loop Rollout Evaluation",
+)

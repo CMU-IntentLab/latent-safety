@@ -19,11 +19,10 @@ if the_ipython_instance is not None:
 
 
 # %% functions
-def load_best_agent(config):
+def load_best_agent(config, environment_info):
     agent = RARL_wm.construct_agent(config, environment_info)
     # TODO get this index from the training dict based on metrics rather than hard-coding
     restore_idx = 10_000
-    # agent.restore(restore_idx, environment_info["outFolder"])
     agent.restore(
         restore_idx, os.path.join(project_root, environment_info["outFolder"])
     )
@@ -123,7 +122,7 @@ def evaluate_rollout_data(rollout_data, ground_truth_brt):
                 is_learning_classification_correct = (
                     is_safe and (learned_failure_time is None)
                 ) or (
-                    not is_safe and (learned_failure_time >= ground_truth_failure_time)
+                    not is_safe and (learned_failure_time is not None) and (learned_failure_time <= ground_truth_failure_time)
                 )
             else:
                 is_safe = False
@@ -183,14 +182,16 @@ def visualize_evaluated_rollout_stats(evaluated_rollouts, title):
 
 # %% setup
 # --- base setup
+position_gridsize = 21
+angle_gridsize = 3
 config = RARL_wm.get_config(parse_args=False)
-agent = load_best_agent(config)
-ground_truth_brt = np.load(config.grid_path)
-
-# --- in-distribution evaluation setup ---
 in_distribution_env, environment_info = RARL_wm.construct_environment(
     config, visualize_failure_sets=False
 )
+agent = load_best_agent(config, environment_info)
+ground_truth_brt = np.load(config.grid_path)
+
+# --- in-distribution evaluation setup ---
 in_distribution_output_folder = os.path.join(
     project_root, environment_info["outFolder"], "in_distribution_rollout_eval"
 )
@@ -198,22 +199,39 @@ in_distribution_output_prefix = "in_distribution_"
 in_distribution_data_path = os.path.join(
     in_distribution_output_folder, in_distribution_output_prefix + "rollout_data"
 )
-# --- out-of-distribution evaluation setup ---
-# TODO
+# --- in-distribution open-loop evaluation setup ---
+in_distribution_open_loop_output_folder = os.path.join(
+    project_root, environment_info["outFolder"], "in_distribution_open_loop_rollout_eval"
+)
+in_distribution_open_loop_output_prefix = "in_distribution_open_loop_"
+in_distribution_open_loop_data_path = os.path.join(
+    in_distribution_open_loop_output_folder, in_distribution_open_loop_output_prefix + "rollout_data"
+)
 
-# %% in_distribution rollout data collection
-## if you skip this cell, the cells below will just load the data from disk
-in_distribution_rollout_data = collect_rollout_data(
+# %% in_distribution rollout data collection with feedback
+# ## if you skip this cell, the cells below will just load the data from disk
+# in_distribution_rollout_data = collect_rollout_data(
+#     in_distribution_env,
+#     agent,
+#     position_gridsize=position_gridsize,
+#     angle_gridsize=angle_gridsize,
+#     output_folder=in_distribution_output_folder,
+#     output_prefix=in_distribution_output_prefix,
+# )
+# save_obj(in_distribution_rollout_data, in_distribution_data_path)
+
+# %% in_distribution rollout data collection in open-loop (no observation feedback)
+# if you skip this cell, the cells below will just load the data from disk
+in_distribution_open_loop_rollout_data = collect_rollout_data(
     in_distribution_env,
     agent,
-    position_gridsize=41,
-    angle_gridsize=3,
-    output_folder=in_distribution_output_folder,
-    output_prefix=in_distribution_output_prefix,
+    position_gridsize=position_gridsize,
+    angle_gridsize=angle_gridsize,
+    output_folder=in_distribution_open_loop_output_folder,
+    output_prefix=in_distribution_open_loop_output_prefix,
+    enable_observation_feedback=False,
 )
-save_obj(in_distribution_rollout_data, in_distribution_data_path)
-
-
+save_obj(in_distribution_open_loop_rollout_data, in_distribution_open_loop_data_path)
 # %% in_distribution data plotting
 in_distribution_rollout_data = load_obj(in_distribution_data_path)
 evaluated_rollouts = evaluate_rollout_data(
@@ -221,4 +239,15 @@ evaluated_rollouts = evaluate_rollout_data(
 )
 visualize_evaluated_rollout_stats(
     evaluated_rollouts, title="In-Distribution Rollout Evaluation"
+)
+
+# %% in_distribution data plotting in open-loop
+in_distribution_open_loop_rollout_data = load_obj(in_distribution_open_loop_data_path)
+evaluated_open_loop_rollouts = evaluate_rollout_data(
+    in_distribution_open_loop_rollout_data, ground_truth_brt
+)
+#%%
+visualize_evaluated_rollout_stats(
+    evaluated_open_loop_rollouts,
+    title="In-Distribution Open-Loop Rollout Evaluation",
 )

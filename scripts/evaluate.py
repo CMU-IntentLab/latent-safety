@@ -1,4 +1,6 @@
 # %% preamble
+# making sure we use GPU1
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import RARL_wm
 import os

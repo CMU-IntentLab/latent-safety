@@ -492,7 +492,7 @@ def RARL(config):
   print("\n== Training Information ==")
   trainRecords, trainProgress = agent.learn(
       env, MAX_UPDATES=environment_info["maxUpdates"],
-      MAX_EP_STEPS=environment_info["axSteps"], warmupQ=False,
+      MAX_EP_STEPS=environment_info["maxSteps"], warmupQ=False,
       doneTerminate=True, vmin=environment_info["vmin"], vmax=environment_info["vmax"], showBool=True,
       checkPeriod=config.checkPeriod, outFolder=environment_info["outFolder"],
       plotFigure=config.plotFigure, storeFigure=config.storeFigure

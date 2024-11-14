@@ -255,6 +255,8 @@ def construct_environment(config, visualize_failure_sets=True):
     visualize_env_failure_sets(env, config, figureFolder)
 
   info = {
+    "vmin" : -1,
+    "vmax" : 1,
     "updatePeriod": updatePeriod,
     "updatePeriodHalf": updatePeriodHalf,
     "device": device,

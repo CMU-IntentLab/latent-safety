@@ -20,8 +20,8 @@ defaults:
   precision: 32
   debug: False
   video_pred_log: True
-  from_ckpt: /home/lassepe/worktree/latent-safety/logs/dreamer_dubins/1024/115719/best_pretrain_joint_0_39.pt
-  lx_ckpt: /home/lassepe/worktree/latent-safety/logs/dreamer_dubins/1024/115719/best_classifier_0_02.pt
+  from_ckpt: /home/lassepe/worktree/latent-safety/logs/dreamer_dubins/1113/114111/best_pretrain_joint_0_95.pt
+  lx_ckpt: /home/lassepe/worktree/latent-safety/logs/dreamer_dubins/1113/114111/best_classifier_0_01.pt
   num_actions: 3
 
   from_prefill_dir: null

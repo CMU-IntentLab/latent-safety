@@ -498,7 +498,7 @@ def RARL(config):
       plotFigure=config.plotFigure, storeFigure=config.storeFigure
   )
 
-  evaluate_training(trainRecords, trainProgress, environment_info)
+  evaluate_training(trainRecords, trainProgress, env, agent, environment_info)
 
 def get_config(parse_args=True):
   parser = argparse.ArgumentParser()

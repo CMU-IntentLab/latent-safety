@@ -24,7 +24,7 @@ if the_ipython_instance is not None:
 def load_best_agent(config, environment_info):
     agent = RARL_wm.construct_agent(config, environment_info)
     # TODO get this index from the training dict based on metrics rather than hard-coding
-    restore_idx = 10_000
+    restore_idx = 150_000
     agent.restore(
         restore_idx, os.path.join(project_root, environment_info["outFolder"])
     )
@@ -48,16 +48,12 @@ def compute_value_funtion_metrics(env, ground_truth_brt, q_func):
     v_nn = np.stack(slices, axis=2)
     v_grid = ground_truth_brt[:, :, theta_indices]
     tn,tp,fn,fp = env.confusion(v_nn, v_grid)
-    print(f"True Negatives: {tn}")
-    print(f"True Positives: {tp}")
-    print(f"False Negatives: {fn}")
-    print(f"False Positives: {fp}")
     accuracy = (tp + tn) / (tp + tn + fp + fn)
     precision = tp / (tp + fp)
     recall = tp / (tp + fn)
     f1 = 2 * precision * recall / (precision + recall)
 
-    return {
+    metrics = {
         "tn": tn,
         "tp": tp,
         "fn": fn,
@@ -67,6 +63,12 @@ def compute_value_funtion_metrics(env, ground_truth_brt, q_func):
         "recall": recall,
         "f1": f1,
     }
+
+    # pretty print the metrics
+    for key, value in metrics.items():
+        print(f"{key}: {value:.3f}")
+
+    return metrics
 
 def get_grid_value_for_state(env, grid, x, y, theta):
     """
@@ -156,19 +158,14 @@ def evaluate_rollout_data(rollout_data, ground_truth_brt):
 
             # high-level classification of the rollout according to main features
             is_feasible = ground_truth_initial_value >= 0
-            if is_feasible:
-                is_safe = ground_truth_failure_margin >= 0
-                is_learning_classification_correct = (
-                    is_safe and (learned_failure_time is None)
-                ) or (
-                    not is_safe
-                    and (learned_failure_time is not None)
-                    and (learned_failure_time <= ground_truth_failure_time)
-                )
-            else:
-                is_safe = False
-                # TODO: think about this case
-                is_learning_classification_correct = True
+            is_safe = ground_truth_failure_margin >= 0
+            is_learning_classification_correct = (
+                is_safe and (learned_failure_time is None)
+            ) or (
+                not is_safe
+                and (learned_failure_time is not None)
+                and (learned_failure_time <= ground_truth_failure_time)
+            )
 
             # aggregate all the data
             evaluated_rollout_data.append(
@@ -217,7 +214,6 @@ def visualize_evaluated_rollout_stats(evaluated_rollouts, title):
     )
     fig.update_traces(textinfo="label+value")
     # set root color to white
-    fig.show()
     return fig
 
 # %% setup
@@ -231,7 +227,7 @@ in_distribution_env, environment_info = RARL_wm.construct_environment(
 agent = load_best_agent(config, environment_info)
 ground_truth_brt = np.load(config.grid_path)
 
-# --- in-distribution evaluation setup ---
+#%% --- in-distribution evaluation setup ---
 in_distribution_output_folder = os.path.join(
     project_root, environment_info["outFolder"], "in_distribution_rollout_eval"
 )
@@ -245,7 +241,7 @@ in_distribution_value_function_metrics = compute_value_funtion_metrics(
     in_distribution_env, ground_truth_brt, agent.Q_network
 )
 
-# --- in-distribution open-loop evaluation setup ---
+# %% --- in-distribution open-loop evaluation setup ---
 in_distribution_open_loop_output_folder = os.path.join(
     project_root,
     environment_info["outFolder"],

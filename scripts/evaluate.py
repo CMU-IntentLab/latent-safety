@@ -31,8 +31,7 @@ def load_best_agent(config, environment_info):
     return agent
 
 
-# %% visualize global confusion matrix
-def compute_global_confusion_matrix(env, ground_truth_brt, q_func):
+def compute_value_funtion_metrics(env, ground_truth_brt, q_func):
     nx = ground_truth_brt.shape[0]
     ny = ground_truth_brt.shape[1]
     # sub-sample theta indices to reduce computation
@@ -46,8 +45,6 @@ def compute_global_confusion_matrix(env, ground_truth_brt, q_func):
             q_func, theta=theta, nx=nx, ny=ny
         )
         slices.append(slice)
-
-    #%%
     v_nn = np.stack(slices, axis=2)
     v_grid = ground_truth_brt[:, :, theta_indices]
     tn,tp,fn,fp = env.confusion(v_nn, v_grid)
@@ -243,8 +240,8 @@ in_distribution_data_path = os.path.join(
     in_distribution_output_folder, in_distribution_output_prefix + "rollout_data"
 )
 
-# %% in-distribution global confusion matrix
-in_distribution_global_confusion_matrix = compute_global_confusion_matrix(
+# %% in-distribution value function metrics
+in_distribution_value_function_metrics = compute_value_funtion_metrics(
     in_distribution_env, ground_truth_brt, agent.Q_network
 )
 

@@ -55,11 +55,20 @@ def compute_global_confusion_matrix(env, ground_truth_brt, q_func):
     print(f"True Positives: {tp}")
     print(f"False Negatives: {fn}")
     print(f"False Positives: {fp}")
+    accuracy = (tp + tn) / (tp + tn + fp + fn)
+    precision = tp / (tp + fp)
+    recall = tp / (tp + fn)
+    f1 = 2 * precision * recall / (precision + recall)
+
     return {
         "tn": tn,
         "tp": tp,
         "fn": fn,
-        "fp": fp
+        "fp": fp,
+        "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
     }
 
 def get_grid_value_for_state(env, grid, x, y, theta):

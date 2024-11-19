@@ -8,13 +8,12 @@ import RARL_wm
 import math
 import numpy as np
 import pandas as pd
-import torch
 from safety_rl.RARL.utils import save_obj, load_obj
 from PIL import Image
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-from IPython import get_ipython
+from IPython import display, get_ipython
 
 the_ipython_instance = get_ipython()
 if the_ipython_instance is not None:
@@ -41,7 +40,6 @@ def compute_value_funtion_metrics(env, ground_truth_brt, q_func):
     theta_indices = np.linspace(0, ground_truth_brt.shape[2] - 1, 3, dtype=int)
     slices = []
     for theta_idx in theta_indices:
-        ground_truth_brt_slice = ground_truth_brt[:, :, theta_idx]
         # map index back to angle
         theta = theta_idx * 2 * np.pi / ground_truth_brt.shape[2]
         slice = env.get_value(q_func, theta=theta, nx=nx, ny=ny)
@@ -50,9 +48,18 @@ def compute_value_funtion_metrics(env, ground_truth_brt, q_func):
     v_grid = ground_truth_brt[:, :, theta_indices]
     tn, tp, fn, fp = env.confusion(v_nn, v_grid)
     accuracy = (tp + tn) / (tp + tn + fp + fn)
-    precision = tp / (tp + fp)
-    recall = tp / (tp + fn)
-    f1 = 2 * precision * recall / (precision + recall)
+    if tp + fp < 1e-6:
+        precision = 0
+    else:
+        precision = tp / (tp + fp)
+    if tp + fn < 1e-6:
+        recall = 0
+    else:
+        recall = tp / (tp + fn)
+    if precision + recall < 1e-6:
+        f1 = 0
+    else:
+        f1 = 2 * precision * recall / (precision + recall)
 
     metrics = {
         "tn": tn,
@@ -64,10 +71,6 @@ def compute_value_funtion_metrics(env, ground_truth_brt, q_func):
         "recall": recall,
         "f1": f1,
     }
-
-    # pretty print the metrics
-    for key, value in metrics.items():
-        print(f"{key}: {value:.3f}")
 
     return metrics
 
@@ -222,168 +225,130 @@ def visualize_evaluated_rollout_stats(evaluated_rollouts, title):
     return fig
 
 
+def run_all_evaluations(
+    env,
+    agent,
+    ground_truth_brt,
+    experiment_name,
+    position_gridsize=10,
+    angle_gridsize=3,
+    reproduce_value_function=True,
+    reproduce_closed_loop_rollouts=True,
+    reproduce_open_loop_rollouts=True,
+    show_plots=True,
+):
+    output_folder = os.path.join(
+        project_root, environment_info["outFolder"], experiment_name
+    )
+    os.makedirs(output_folder, exist_ok=True)
+
+    # ------------------------------------------- value function
+    value_function_metrics_path = os.path.join(
+        output_folder, experiment_name + "_value_function_metrics"
+    )
+    if reproduce_value_function:
+        value_function_metrics = compute_value_funtion_metrics(
+            env, ground_truth_brt, agent.Q_network
+        )
+        save_obj(value_function_metrics, value_function_metrics_path)
+    value_function_metrics = load_obj(value_function_metrics_path)
+    # pretty print the metrics
+    for key, value in value_function_metrics.items():
+        print(f"{key}: {value:.3f}")
+
+    # ----------------------- closed-loop rollout data collection
+    closed_loop_rollout_data_path = os.path.join(
+        output_folder, experiment_name + "closed_loop_rollout_data"
+    )
+    if reproduce_closed_loop_rollouts:
+        rollout_data = collect_rollout_data(
+            env,
+            agent,
+            position_gridsize=position_gridsize,
+            angle_gridsize=angle_gridsize,
+            output_folder=output_folder,
+            output_prefix=f"closed_loop_${experiment_name}",
+        )
+        save_obj(rollout_data, closed_loop_rollout_data_path)
+    rollout_data = load_obj(closed_loop_rollout_data_path)
+    evaluated_rollouts = evaluate_rollout_data(env, rollout_data, ground_truth_brt)
+    plt = visualize_evaluated_rollout_stats(
+        evaluated_rollouts, title=f"{experiment_name} Closed-Loop Rollout Evaluation"
+    )
+    if the_ipython_instance is not None and show_plots:
+        display(plt)
+
+    # ----------------------- open-loop rollout data collection
+    open_loop_rollout_data_path = os.path.join(
+        output_folder,
+        experiment_name + "open_loop_rollout_data",
+    )
+    if reproduce_open_loop_rollouts:
+        open_loop_rollout_data = collect_rollout_data(
+            env,
+            agent,
+            position_gridsize=position_gridsize,
+            angle_gridsize=angle_gridsize,
+            output_folder=output_folder,
+            output_prefix=f"open_loop_${experiment_name}",
+            enable_observation_feedback=False,
+        )
+        save_obj(open_loop_rollout_data, open_loop_rollout_data_path)
+    open_loop_rollout_data = load_obj(open_loop_rollout_data_path)
+    evaluated_open_loop_rollouts = evaluate_rollout_data(
+        env, open_loop_rollout_data, ground_truth_brt
+    )
+    plt = visualize_evaluated_rollout_stats(
+        evaluated_open_loop_rollouts,
+        title=f"{experiment_name} Open-Loop Rollout Evaluation",
+    )
+    if the_ipython_instance is not None and show_plots:
+        display(plt)
+
+
 # %% base setup
 position_gridsize = 10
 angle_gridsize = 3
 config = RARL_wm.get_config(parse_args=False)
-in_distribution_env, environment_info = RARL_wm.construct_environment(
+base_env, environment_info = RARL_wm.construct_environment(
     config, visualize_failure_sets=False
 )
 agent = load_best_agent(config, environment_info)
 ground_truth_brt = np.load(config.grid_path)
+
+# %%
+# in-distribution evaluation
+in_distribution_env = base_env
 # show the nominal visual apperance
 Image.fromarray(in_distribution_env.capture_image())
-
-# %% # --- in-distribution evaluation setup ---
-in_distribution_output_folder = os.path.join(
-    project_root, environment_info["outFolder"], "in_distribution_rollout_eval"
-)
-in_distribution_output_prefix = "in_distribution_"
-in_distribution_data_path = os.path.join(
-    in_distribution_output_folder, in_distribution_output_prefix + "rollout_data"
-)
-
-# %% --- in-distribution open-loop evaluation setup ---
-in_distribution_open_loop_output_folder = os.path.join(
-    project_root,
-    environment_info["outFolder"],
-    "in_distribution_open_loop_rollout_eval",
-)
-in_distribution_open_loop_output_prefix = "in_distribution_open_loop_"
-in_distribution_open_loop_data_path = os.path.join(
-    in_distribution_open_loop_output_folder,
-    in_distribution_open_loop_output_prefix + "rollout_data",
-)
-
-# %% in-distribution value function metrics
-in_distribution_value_function_metrics = compute_value_funtion_metrics(
-    in_distribution_env, ground_truth_brt, agent.Q_network
-)
-
-# %% in_distribution rollout data collection with feedback
-in_distribution_rollout_data = collect_rollout_data(
+run_all_evaluations(
     in_distribution_env,
     agent,
+    ground_truth_brt,
+    "in-distribution",
     position_gridsize=position_gridsize,
     angle_gridsize=angle_gridsize,
-    output_folder=in_distribution_output_folder,
-    output_prefix=in_distribution_output_prefix,
-)
-save_obj(in_distribution_rollout_data, in_distribution_data_path)
-
-# %% in_distribution data plotting
-in_distribution_rollout_data = load_obj(in_distribution_data_path)
-evaluated_rollouts = evaluate_rollout_data(
-    in_distribution_env, in_distribution_rollout_data, ground_truth_brt
-)
-visualize_evaluated_rollout_stats(
-    evaluated_rollouts, title="In-Distribution Rollout Evaluation"
+    # reproduce_closed_loop_rollouts=False,
+    # reproduce_open_loop_rollouts=False,
+    # reproduce_value_function=False,
 )
 
-# %% in_distribution rollout data collection in open-loop (no observation feedback)
-# if you skip this cell, the cells below will just load the data from disk
-in_distribution_open_loop_rollout_data = collect_rollout_data(
-    in_distribution_env,
-    agent,
-    position_gridsize=position_gridsize,
-    angle_gridsize=angle_gridsize,
-    output_folder=in_distribution_open_loop_output_folder,
-    output_prefix=in_distribution_open_loop_output_prefix,
-    enable_observation_feedback=False,
-)
-save_obj(in_distribution_open_loop_rollout_data, in_distribution_open_loop_data_path)
-
-# %% in_distribution data plotting in open-loop
-in_distribution_open_loop_rollout_data = load_obj(in_distribution_open_loop_data_path)
-evaluated_open_loop_rollouts = evaluate_rollout_data(
-    in_distribution_env, in_distribution_open_loop_rollout_data, ground_truth_brt
-)
-visualize_evaluated_rollout_stats(
-    evaluated_open_loop_rollouts,
-    title="In-Distribution Open-Loop Rollout Evaluation",
-)
-
-# %% OOD setup
+# %%
+# out-of-distribution evaluation
 # use the `ood_dict` to override certain visual properties of the environment
 out_of_distribution_env, _ = RARL_wm.construct_environment(
     config, visualize_failure_sets=False, ood_dict={"background": (0, 1, 1)}
 )
 # render OOD appearance
 Image.fromarray(out_of_distribution_env.capture_image())
-
-# %% --- out-of-distribution evaluation setup ---
-out_of_distribution_output_folder = os.path.join(
-    project_root, environment_info["outFolder"], "out_of_distribution_rollout_eval"
-)
-out_of_distribution_output_prefix = "out_of_distribution_"
-out_of_distribution_data_path = os.path.join(
-    out_of_distribution_output_folder,
-    out_of_distribution_output_prefix + "rollout_data",
-)
-
-# %% out-of-distribution value function metrics
-out_of_distribution_value_function_metrics = compute_value_funtion_metrics(
-    out_of_distribution_env, ground_truth_brt, agent.Q_network
-)
-
-# %% out-of-distribution rollout data collection with feedback
-out_of_distribution_rollout_data = collect_rollout_data(
+run_all_evaluations(
     out_of_distribution_env,
     agent,
-    position_gridsize=position_gridsize,
-    angle_gridsize=angle_gridsize,
-    output_folder=out_of_distribution_output_folder,
-    output_prefix=out_of_distribution_output_prefix,
-)
-save_obj(out_of_distribution_rollout_data, out_of_distribution_data_path)
-
-# %% out-of-distribution data plotting
-out_of_distribution_rollout_data = load_obj(out_of_distribution_data_path)
-evaluated_out_of_distribution_rollouts = evaluate_rollout_data(
-    out_of_distribution_env, out_of_distribution_rollout_data, ground_truth_brt
-)
-visualize_evaluated_rollout_stats(
-    evaluated_out_of_distribution_rollouts,
-    title="Out-of-Distribution Rollout Evaluation",
-)
-
-# %% --- out-of-distribution open-loop evaluation setup ---
-out_of_distribution_open_loop_output_folder = os.path.join(
-    project_root,
-    environment_info["outFolder"],
-    "out_of_distribution_open_loop_rollout_eval",
-)
-out_of_distribution_open_loop_output_prefix = "out_of_distribution_open_loop_"
-out_of_distribution_open_loop_data_path = os.path.join(
-    out_of_distribution_open_loop_output_folder,
-    out_of_distribution_open_loop_output_prefix + "rollout_data",
-)
-
-# %% out_of_distribution rollout data collection in open-loop (no observation feedback)
-# if you skip this cell, the cells below will just load the data from disk
-out_of_distribution_open_loop_rollout_data = collect_rollout_data(
-    out_of_distribution_env,
-    agent,
-    position_gridsize=position_gridsize,
-    angle_gridsize=angle_gridsize,
-    output_folder=out_of_distribution_open_loop_output_folder,
-    output_prefix=out_of_distribution_open_loop_output_prefix,
-    enable_observation_feedback=False,
-)
-save_obj(
-    out_of_distribution_open_loop_rollout_data, out_of_distribution_open_loop_data_path
-)
-
-# %% out_of_distribution data plotting in open-loop
-out_of_distribution_open_loop_rollout_data = load_obj(
-    out_of_distribution_open_loop_data_path
-)
-evaluated_open_loop_out_of_distribution_rollouts = evaluate_rollout_data(
-    out_of_distribution_env,
-    out_of_distribution_open_loop_rollout_data,
     ground_truth_brt,
-)
-visualize_evaluated_rollout_stats(
-    evaluated_open_loop_out_of_distribution_rollouts,
-    title="Out-of-Distribution Open-Loop Rollout Evaluation",
+    "out-of-distribution",
+    position_gridsize=position_gridsize,
+    angle_gridsize=angle_gridsize,
+    # reproduce_closed_loop_rollouts=False,
+    # reproduce_open_loop_rollouts=False,
+    # reproduce_value_function=False,
 )

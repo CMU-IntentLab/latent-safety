@@ -306,8 +306,8 @@ def run_all_evaluations(
 
 
 # %% base setup
-position_gridsize = 2
-angle_gridsize = 2
+position_gridsize = 10
+angle_gridsize = 3
 config = RARL_wm.get_config(parse_args=False)
 base_env, environment_info = RARL_wm.construct_environment(
     config, visualize_failure_sets=False

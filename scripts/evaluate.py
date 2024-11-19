@@ -13,9 +13,9 @@ from PIL import Image
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-from IPython import display, get_ipython
+import IPython
 
-the_ipython_instance = get_ipython()
+the_ipython_instance = IPython.get_ipython()
 if the_ipython_instance is not None:
     the_ipython_instance.magic("load_ext autoreload")
     the_ipython_instance.magic("autoreload 2")
@@ -230,8 +230,8 @@ def run_all_evaluations(
     agent,
     ground_truth_brt,
     experiment_name,
-    position_gridsize=10,
-    angle_gridsize=3,
+    position_gridsize,
+    angle_gridsize,
     reproduce_value_function=True,
     reproduce_closed_loop_rollouts=True,
     reproduce_open_loop_rollouts=True,
@@ -276,7 +276,7 @@ def run_all_evaluations(
         evaluated_rollouts, title=f"{experiment_name} Closed-Loop Rollout Evaluation"
     )
     if the_ipython_instance is not None and show_plots:
-        display(plt)
+        IPython.display.display(plt)
 
     # ----------------------- open-loop rollout data collection
     open_loop_rollout_data_path = os.path.join(
@@ -303,132 +303,71 @@ def run_all_evaluations(
         title=f"{experiment_name} Open-Loop Rollout Evaluation",
     )
     if the_ipython_instance is not None and show_plots:
-        display(plt)
+        IPython.display.display(plt)
 
 
 # %% base setup
-position_gridsize = 10
-angle_gridsize = 3
+position_gridsize = 2
+angle_gridsize = 2
 config = RARL_wm.get_config(parse_args=False)
 base_env, environment_info = RARL_wm.construct_environment(
     config, visualize_failure_sets=False
 )
 agent = load_best_agent(config, environment_info)
 ground_truth_brt = np.load(config.grid_path)
+experiment_setups = {}
 
 # %%
-# in-distribution evaluation
-in_distribution_env = base_env
-# show the nominal visual apperance
-Image.fromarray(in_distribution_env.capture_image())
-run_all_evaluations(
-    in_distribution_env,
-    agent,
-    ground_truth_brt,
-    "in-distribution",
-    position_gridsize=position_gridsize,
-    angle_gridsize=angle_gridsize,
-    # reproduce_closed_loop_rollouts=False,
-    # reproduce_open_loop_rollouts=False,
-    # reproduce_value_function=False,
-)
+# in-distribution setup
+experiment_setups["nominal"] = {
+    "env": base_env,
+    "ground_truth_brt": ground_truth_brt,
+}
 
 # %%
 # out-of-distribution evaluation with cyan background
-# use the `ood_dict` to override certain visual properties of the environment
-cyanbg_ood_env, _ = RARL_wm.construct_environment(
+experiment_setups["cyanbg_ood"], _ = RARL_wm.construct_environment(
     config, visualize_failure_sets=False, ood_dict={"background": (0, 1, 1)}
-)
-# render OOD appearance
-Image.fromarray(cyanbg_ood_env.capture_image())
-run_all_evaluations(
-    cyanbg_ood_env,
-    agent,
-    ground_truth_brt,
-    "cyanbg-ood",
-    position_gridsize=position_gridsize,
-    angle_gridsize=angle_gridsize,
-    # reproduce_closed_loop_rollouts=False,
-    # reproduce_open_loop_rollouts=False,
-    # reproduce_value_function=False,
 )
 
 # %%
 # out-of-distribution evaluation with magenta background
-# use the `ood_dict` to override certain visual properties of the environment
-magentabg_ood_env, _ = RARL_wm.construct_environment(
+experiment_setups["magentabg_ood"], _ = RARL_wm.construct_environment(
     config, visualize_failure_sets=False, ood_dict={"background": (1, 0, 1)}
-)
-# render OOD appearance
-Image.fromarray(magentabg_ood_env.capture_image())
-run_all_evaluations(
-    magentabg_ood_env,
-    agent,
-    ground_truth_brt,
-    "magentabg-ood",
-    position_gridsize=position_gridsize,
-    angle_gridsize=angle_gridsize,
-    # reproduce_closed_loop_rollouts=False,
-    # reproduce_open_loop_rollouts=False,
-    # reproduce_value_function=False,
 )
 
 # %%
 # out-of-distribution evaluation with different scale
-# use the `ood_dict` to override certain visual properties of the environment
-scaled01_ood_env, _ = RARL_wm.construct_environment(
+experiment_setups["scaled01_ood"], _ = RARL_wm.construct_environment(
     config, visualize_failure_sets=False, ood_dict={"scale": 0.1}
-)
-# render OOD appearance
-Image.fromarray(scaled01_ood_env.capture_image())
-run_all_evaluations(
-    scaled01_ood_env,
-    agent,
-    ground_truth_brt,
-    "scaled01-ood",
-    position_gridsize=position_gridsize,
-    angle_gridsize=angle_gridsize,
-    # reproduce_closed_loop_rollouts=False,
-    # reproduce_open_loop_rollouts=False,
-    # reproduce_value_function=False,
 )
 
 # %%
 # out-of-distribution evaluation with magenta obstacles
-# use the `ood_dict` to override certain visual properties of the environment
-magentaobs_ood_env, _ = RARL_wm.construct_environment(
+experiment_setups["magentaobs_ood"], _ = RARL_wm.construct_environment(
     config, visualize_failure_sets=False, ood_dict={"obstacle_color": (1, 0, 1)}
-)
-# render OOD appearance
-Image.fromarray(magentaobs_ood_env.capture_image())
-run_all_evaluations(
-    magentaobs_ood_env,
-    agent,
-    ground_truth_brt,
-    "magentaobs-ood",
-    position_gridsize=position_gridsize,
-    angle_gridsize=angle_gridsize,
-    # reproduce_closed_loop_rollouts=False,
-    # reproduce_open_loop_rollouts=False,
-    # reproduce_value_function=False,
 )
 
 # %%
 # out-of-distribution evaluation with yellow obstacles
-# use the `ood_dict` to override certain visual properties of the environment
-yellowobs_ood_env, _ = RARL_wm.construct_environment(
+experiment_setups["yellowobs_ood"], _ = RARL_wm.construct_environment(
     config, visualize_failure_sets=False, ood_dict={"obstacle_color": (1, 1, 0)}
 )
-# render OOD appearance
-Image.fromarray(yellowobs_ood_env.capture_image())
-run_all_evaluations(
-    yellowobs_ood_env,
-    agent,
-    ground_truth_brt,
-    "yellowobs-ood",
-    position_gridsize=position_gridsize,
-    angle_gridsize=angle_gridsize,
-    # reproduce_closed_loop_rollouts=False,
-    # reproduce_open_loop_rollouts=False,
-    # reproduce_value_function=False,
-)
+# %%
+# run all of the experiment setups in sequence
+for experiment_name, experiment_setup in experiment_setups.items():
+    print(f"Running evaluation for {experiment_name}")
+    img = Image.fromarray(experiment_setup["env"].capture_image())
+    if the_ipython_instance is not None:
+        IPython.display.display(img)
+    run_all_evaluations(
+        env=experiment_setup["env"],
+        agent=agent,
+        ground_truth_brt=experiment_setup["ground_truth_brt"],
+        experiment_name=experiment_name,
+        position_gridsize=position_gridsize,
+        angle_gridsize=angle_gridsize,
+        # reproduce_closed_loop_rollouts=False,
+        # reproduce_open_loop_rollouts=False,
+        # reproduce_value_function=False,
+    )

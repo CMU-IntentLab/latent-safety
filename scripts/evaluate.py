@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from safety_rl.RARL.utils import save_obj, load_obj
 from PIL import Image
-
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 import IPython
@@ -315,44 +314,52 @@ base_env, environment_info = RARL_wm.construct_environment(
 )
 agent = load_best_agent(config, environment_info)
 ground_truth_brt = np.load(config.grid_path)
-experiment_setups = {}
 
 # %%
+experiment_setups = {}
+# -------------------------------------------------------appearance ood setups
 # in-distribution setup
 experiment_setups["nominal"] = {
     "env": base_env,
     "ground_truth_brt": ground_truth_brt,
 }
 
-# %%
 # out-of-distribution evaluation with cyan background
-experiment_setups["cyanbg_ood"], _ = RARL_wm.construct_environment(
-    config, visualize_failure_sets=False, ood_dict={"background": (0, 1, 1)}
-)
-
-# %%
+experiment_setups["cyanbg_ood"] = {
+    "env": RARL_wm.construct_environment(
+        config, visualize_failure_sets=False, ood_dict={"background": (0, 1, 1)}
+    )[0],
+    "ground_truth_brt": ground_truth_brt,
+}
 # out-of-distribution evaluation with magenta background
-experiment_setups["magentabg_ood"], _ = RARL_wm.construct_environment(
-    config, visualize_failure_sets=False, ood_dict={"background": (1, 0, 1)}
-)
-
-# %%
+experiment_setups["magentabg_ood"] = {
+    "env": RARL_wm.construct_environment(
+        config, visualize_failure_sets=False, ood_dict={"background": (1, 0, 1)}
+    )[0],
+    "ground_truth_brt": ground_truth_brt,
+}
 # out-of-distribution evaluation with different scale
-experiment_setups["scaled01_ood"], _ = RARL_wm.construct_environment(
-    config, visualize_failure_sets=False, ood_dict={"scale": 0.1}
-)
-
-# %%
+experiment_setups["scaled01_ood"] = {
+    "env": RARL_wm.construct_environment(
+        config, visualize_failure_sets=False, ood_dict={"scale": 0.1}
+    )[0],
+    "ground_truth_brt": ground_truth_brt,
+}
 # out-of-distribution evaluation with magenta obstacles
-experiment_setups["magentaobs_ood"], _ = RARL_wm.construct_environment(
-    config, visualize_failure_sets=False, ood_dict={"obstacle_color": (1, 0, 1)}
-)
-
-# %%
+experiment_setups["magentaobs_ood"] = {
+    "env": RARL_wm.construct_environment(
+        config, visualize_failure_sets=False, ood_dict={"obstacle_color": (1, 0, 1)}
+    )[0],
+    "ground_truth_brt": ground_truth_brt,
+}
 # out-of-distribution evaluation with yellow obstacles
-experiment_setups["yellowobs_ood"], _ = RARL_wm.construct_environment(
-    config, visualize_failure_sets=False, ood_dict={"obstacle_color": (1, 1, 0)}
-)
+experiment_setups["yellowobs_ood"] = {
+    "env": RARL_wm.construct_environment(
+        config, visualize_failure_sets=False, ood_dict={"obstacle_color": (1, 1, 0)}
+    )[0],
+    "ground_truth_brt": ground_truth_brt,
+}
+
 # %%
 # run all of the experiment setups in sequence
 for experiment_name, experiment_setup in experiment_setups.items():

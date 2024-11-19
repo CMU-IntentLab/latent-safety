@@ -336,6 +336,9 @@ class DubinsCarOneEnvImg(gym.Env):
     )
     self.car.set_bounds(bounds)
 
+  def set_ood_dict(self, ood_dict):
+    self.ood_dict = ood_dict
+
   def set_speed(self, speed=0.5):
     """Sets the linear velocity of the car.
 
@@ -683,8 +686,8 @@ class DubinsCarOneEnvImg(gym.Env):
       if self.car.use_wm:
         state_gt = state
         img = self.capture_image(state)
-        learned_g_x, feat, post = self.car.get_latent([state[0]], [state[1]], [state[2]], [img])
-        self.car.latent = post
+        learned_g_x, feat, latent= self.car.get_latent([state[0]], [state[1]], [state[2]], [img])
+        self.car.latent = latent
 
     self.car.state = state_gt
     groundtruth_g_x = self.safety_margin(state_gt)
@@ -694,6 +697,7 @@ class DubinsCarOneEnvImg(gym.Env):
       "valueList": [],
       "gxList": [],
       "minV": float('inf'),
+      "actionValueList": [],
     }
 
     learned_metrics = {
@@ -701,24 +705,34 @@ class DubinsCarOneEnvImg(gym.Env):
       "valueList": [],
       "gxList": [],
       "minV": float('inf'),
+      "actionValueList": [],
     }
 
-    def _update_metrics(metrics, state, g_x):
+    def _update_metrics(metrics, state, g_x, action_value=None):
       metrics["traj"].append(state)
       metrics["gxList"].append(g_x)
       metrics["minV"] = min(metrics["minV"], g_x)
       metrics["valueList"].append(metrics["minV"])
+      if action_value is not None:
+        metrics["actionValueList"].append(action_value)
 
     # 0: unfinished, 1: success, -1: failure
     result = 0
 
     # actual rollout of the policy over time
     for _ in range(T):
+      # compute action
+      q_func.eval()
+      state_tensor = torch.Tensor(feat).to(self.device).unsqueeze(0)
+      action_value, action_index = q_func(state_tensor).max(dim=1)
+      action_value = action_value.item()
+      action_index = action_index.item()
+      action_tensor = torch.Tensor([action_index]).to(self.device).long()
+
       groundtruth_g_x = self.safety_margin(state_gt)
       if self.car.use_wm:
-        # TODO: not sure if this actually accepts `feat` or wether it needs the `post` output
         learned_g_x = self.car.safety_margin(torch.Tensor(feat).to(self.device))
-        _update_metrics(learned_metrics, state_gt, learned_g_x)
+        _update_metrics(learned_metrics, latent, learned_g_x, action_value)
 
       # = Rollout Record
       _update_metrics(groundtruth_metrics, state_gt, groundtruth_g_x)
@@ -733,12 +747,6 @@ class DubinsCarOneEnvImg(gym.Env):
         if not wait_for_all_metrics_to_predict_failure or (self.car.use_wm and learned_metrics["minV"] < 0):
           result = -1
           break
-
-      # compute action
-      q_func.eval()
-      state_tensor = torch.Tensor(feat).to(self.device).unsqueeze(0)
-      action_index = q_func(state_tensor).max(dim=1)[1].item()
-      action_tensor = torch.Tensor([action_index]).to(self.device).long()
 
       if self.car.use_wm:
         distance = np.linalg.norm(state_gt - self.car.state)
@@ -855,13 +863,23 @@ class DubinsCarOneEnvImg(gym.Env):
 
 
   def capture_image(self, state=None):
-    """Captures an image of the current state of the environment."""
+    """Captures an image of the current state of the environment.
+
+    - ood_dict: a dict with elements to override the nominal observation behavior
+    """
+    # get visual properties; potentially derive from ood_dict
+    color = self.ood_dict.get('color', (0,0,1))
+    scale = self.ood_dict.get('scale', 0.2)
+    width = self.ood_dict.get('width', 0.05)
+    background = self.ood_dict.get('background', 'white')
+
     # For simplicity, we create a blank image. In practice, this should render the environment.
     fig,ax = plt.subplots()
     plt.xlim([-1.1, 1.1])
     plt.ylim([-1.1, 1.1])
     plt.axis('off')
     fig.set_size_inches( 1, 1 )
+    fig.patch.set_facecolor(background)
     # Create the circle patch
     circle = patches.Circle(self.constraint_center, self.constraint_radius, edgecolor=(1,0,0), facecolor='none')
     # Add the circle patch to the axis
@@ -869,11 +887,9 @@ class DubinsCarOneEnvImg(gym.Env):
     v = self.speed
     dpi=self.image_size
     ax.add_patch(circle)
-    if state is None:
-      plt.quiver(self.state[0], self.state[1], dt*v*np.cos(self.state[2]), dt*v*np.sin(self.state[2]), angles='xy', scale_units='xy', minlength=0,width=0.05, scale=0.2,color=(0,0,1), zorder=3)
-    else:
-      plt.quiver(state[0], state[1], dt*v*np.cos(state[2]), dt*v*np.sin(state[2]), angles='xy', scale_units='xy', minlength=0,width=0.05, scale=0.2,color=(0,0,1), zorder=3)
 
+    state_to_render = self.state if state is None else state
+    plt.quiver(state_to_render[0], state_to_render[1], dt*v*np.cos(state_to_render[2]), dt*v*np.sin(state_to_render[2]), angles='xy', scale_units='xy', minlength=0,width=width, scale=scale,color=color, zorder=3)
     plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
     buf = io.BytesIO()

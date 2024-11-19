@@ -1,13 +1,16 @@
 # %% preamble
 # making sure we use GPU1
+import os
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import RARL_wm
-import os
 import math
 import numpy as np
 import pandas as pd
+import torch
 from safety_rl.RARL.utils import save_obj, load_obj
+from PIL import Image
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -41,13 +44,11 @@ def compute_value_funtion_metrics(env, ground_truth_brt, q_func):
         ground_truth_brt_slice = ground_truth_brt[:, :, theta_idx]
         # map index back to angle
         theta = theta_idx * 2 * np.pi / ground_truth_brt.shape[2]
-        slice = env.get_value(
-            q_func, theta=theta, nx=nx, ny=ny
-        )
+        slice = env.get_value(q_func, theta=theta, nx=nx, ny=ny)
         slices.append(slice)
     v_nn = np.stack(slices, axis=2)
     v_grid = ground_truth_brt[:, :, theta_indices]
-    tn,tp,fn,fp = env.confusion(v_nn, v_grid)
+    tn, tp, fn, fp = env.confusion(v_nn, v_grid)
     accuracy = (tp + tn) / (tp + tn + fp + fn)
     precision = tp / (tp + fp)
     recall = tp / (tp + fn)
@@ -69,6 +70,7 @@ def compute_value_funtion_metrics(env, ground_truth_brt, q_func):
         print(f"{key}: {value:.3f}")
 
     return metrics
+
 
 def get_grid_value_for_state(env, grid, x, y, theta):
     """
@@ -123,7 +125,7 @@ def collect_rollout_data(
     return rollout_data
 
 
-def evaluate_rollout_data(rollout_data, ground_truth_brt):
+def evaluate_rollout_data(env, rollout_data, ground_truth_brt):
     evaluated_rollout_data = []
 
     for theta_data in rollout_data.values():
@@ -133,7 +135,7 @@ def evaluate_rollout_data(rollout_data, ground_truth_brt):
             ground_truth_metrics = rollout_info["groundtruth_metrics"]
             ground_truth_initial_state = ground_truth_metrics["traj"][0]
             ground_truth_initial_value = get_grid_value_for_state(
-                in_distribution_env, ground_truth_brt, *ground_truth_initial_state
+                env, ground_truth_brt, *ground_truth_initial_state
             )
             ground_truth_failure_margin = ground_truth_metrics["minV"]
             ground_truth_failure_time = next(
@@ -146,35 +148,38 @@ def evaluate_rollout_data(rollout_data, ground_truth_brt):
             )
             # learned metrics
             learned_metrics = rollout_info["learned_metrics"]
-            learned_failure_time = next(
+            learned_safety_time = next(
                 (
                     idx
-                    for idx, value in enumerate(learned_metrics["valueList"])
+                    for idx, value in enumerate(learned_metrics["actionValueList"])
                     if value < 0
                 ),
                 None,
             )
-            learned_failure_margin = learned_metrics["minV"]
 
             # high-level classification of the rollout according to main features
             is_feasible = ground_truth_initial_value >= 0
             is_safe = ground_truth_failure_margin >= 0
+
+            assert is_safe == (ground_truth_failure_time is None)
+
             is_learning_classification_correct = (
-                is_safe and (learned_failure_time is None)
+                is_safe and (learned_safety_time is None)
             ) or (
-                not is_safe
-                and (learned_failure_time is not None)
-                and (learned_failure_time <= ground_truth_failure_time)
+                (not is_safe)
+                and (learned_safety_time is not None)
+                and (learned_safety_time <= ground_truth_failure_time)
             )
+
+            if not is_learning_classification_correct:
+                asdf = 1
 
             # aggregate all the data
             evaluated_rollout_data.append(
                 {
                     "ground_truth_initial_value": ground_truth_initial_value,
-                    "ground_truth_failure_margin": ground_truth_failure_margin,
                     "ground_truth_failure_time": ground_truth_failure_time,
-                    "learned_failure_time": learned_failure_time,
-                    "learned_failure_margin": learned_failure_margin,
+                    "learned_failure_time": learned_safety_time,
                     "is_feasible": is_feasible,
                     "is_safe": is_safe,
                     "is_learning_classification_correct": is_learning_classification_correct,
@@ -216,9 +221,9 @@ def visualize_evaluated_rollout_stats(evaluated_rollouts, title):
     # set root color to white
     return fig
 
-# %% setup
-# --- base setup
-position_gridsize = 21
+
+# %% base setup
+position_gridsize = 10
 angle_gridsize = 3
 config = RARL_wm.get_config(parse_args=False)
 in_distribution_env, environment_info = RARL_wm.construct_environment(
@@ -226,19 +231,16 @@ in_distribution_env, environment_info = RARL_wm.construct_environment(
 )
 agent = load_best_agent(config, environment_info)
 ground_truth_brt = np.load(config.grid_path)
+# show the nominal visual apperance
+Image.fromarray(in_distribution_env.capture_image())
 
-#%% --- in-distribution evaluation setup ---
+# %% # --- in-distribution evaluation setup ---
 in_distribution_output_folder = os.path.join(
     project_root, environment_info["outFolder"], "in_distribution_rollout_eval"
 )
 in_distribution_output_prefix = "in_distribution_"
 in_distribution_data_path = os.path.join(
     in_distribution_output_folder, in_distribution_output_prefix + "rollout_data"
-)
-
-# %% in-distribution value function metrics
-in_distribution_value_function_metrics = compute_value_funtion_metrics(
-    in_distribution_env, ground_truth_brt, agent.Q_network
 )
 
 # %% --- in-distribution open-loop evaluation setup ---
@@ -251,6 +253,11 @@ in_distribution_open_loop_output_prefix = "in_distribution_open_loop_"
 in_distribution_open_loop_data_path = os.path.join(
     in_distribution_open_loop_output_folder,
     in_distribution_open_loop_output_prefix + "rollout_data",
+)
+
+# %% in-distribution value function metrics
+in_distribution_value_function_metrics = compute_value_funtion_metrics(
+    in_distribution_env, ground_truth_brt, agent.Q_network
 )
 
 # %% in_distribution rollout data collection with feedback
@@ -267,7 +274,7 @@ save_obj(in_distribution_rollout_data, in_distribution_data_path)
 # %% in_distribution data plotting
 in_distribution_rollout_data = load_obj(in_distribution_data_path)
 evaluated_rollouts = evaluate_rollout_data(
-    in_distribution_rollout_data, ground_truth_brt
+    in_distribution_env, in_distribution_rollout_data, ground_truth_brt
 )
 visualize_evaluated_rollout_stats(
     evaluated_rollouts, title="In-Distribution Rollout Evaluation"
@@ -289,10 +296,94 @@ save_obj(in_distribution_open_loop_rollout_data, in_distribution_open_loop_data_
 # %% in_distribution data plotting in open-loop
 in_distribution_open_loop_rollout_data = load_obj(in_distribution_open_loop_data_path)
 evaluated_open_loop_rollouts = evaluate_rollout_data(
-    in_distribution_open_loop_rollout_data, ground_truth_brt
+    in_distribution_env, in_distribution_open_loop_rollout_data, ground_truth_brt
 )
-# %%
 visualize_evaluated_rollout_stats(
     evaluated_open_loop_rollouts,
     title="In-Distribution Open-Loop Rollout Evaluation",
+)
+
+# %% OOD setup
+# use the `ood_dict` to override certain visual properties of the environment
+out_of_distribution_env, _ = RARL_wm.construct_environment(
+    config, visualize_failure_sets=False, ood_dict={"background": (0, 1, 1)}
+)
+# render OOD appearance
+Image.fromarray(out_of_distribution_env.capture_image())
+
+# %% --- out-of-distribution evaluation setup ---
+out_of_distribution_output_folder = os.path.join(
+    project_root, environment_info["outFolder"], "out_of_distribution_rollout_eval"
+)
+out_of_distribution_output_prefix = "out_of_distribution_"
+out_of_distribution_data_path = os.path.join(
+    out_of_distribution_output_folder,
+    out_of_distribution_output_prefix + "rollout_data",
+)
+
+# %% out-of-distribution value function metrics
+out_of_distribution_value_function_metrics = compute_value_funtion_metrics(
+    out_of_distribution_env, ground_truth_brt, agent.Q_network
+)
+
+# %% out-of-distribution rollout data collection with feedback
+out_of_distribution_rollout_data = collect_rollout_data(
+    out_of_distribution_env,
+    agent,
+    position_gridsize=position_gridsize,
+    angle_gridsize=angle_gridsize,
+    output_folder=out_of_distribution_output_folder,
+    output_prefix=out_of_distribution_output_prefix,
+)
+save_obj(out_of_distribution_rollout_data, out_of_distribution_data_path)
+
+# %% out-of-distribution data plotting
+out_of_distribution_rollout_data = load_obj(out_of_distribution_data_path)
+evaluated_out_of_distribution_rollouts = evaluate_rollout_data(
+    out_of_distribution_env, out_of_distribution_rollout_data, ground_truth_brt
+)
+visualize_evaluated_rollout_stats(
+    evaluated_out_of_distribution_rollouts,
+    title="Out-of-Distribution Rollout Evaluation",
+)
+
+# %% --- out-of-distribution open-loop evaluation setup ---
+out_of_distribution_open_loop_output_folder = os.path.join(
+    project_root,
+    environment_info["outFolder"],
+    "out_of_distribution_open_loop_rollout_eval",
+)
+out_of_distribution_open_loop_output_prefix = "out_of_distribution_open_loop_"
+out_of_distribution_open_loop_data_path = os.path.join(
+    out_of_distribution_open_loop_output_folder,
+    out_of_distribution_open_loop_output_prefix + "rollout_data",
+)
+
+# %% out_of_distribution rollout data collection in open-loop (no observation feedback)
+# if you skip this cell, the cells below will just load the data from disk
+out_of_distribution_open_loop_rollout_data = collect_rollout_data(
+    out_of_distribution_env,
+    agent,
+    position_gridsize=position_gridsize,
+    angle_gridsize=angle_gridsize,
+    output_folder=out_of_distribution_open_loop_output_folder,
+    output_prefix=out_of_distribution_open_loop_output_prefix,
+    enable_observation_feedback=False,
+)
+save_obj(
+    out_of_distribution_open_loop_rollout_data, out_of_distribution_open_loop_data_path
+)
+
+# %% out_of_distribution data plotting in open-loop
+out_of_distribution_open_loop_rollout_data = load_obj(
+    out_of_distribution_open_loop_data_path
+)
+evaluated_open_loop_out_of_distribution_rollouts = evaluate_rollout_data(
+    out_of_distribution_env,
+    out_of_distribution_open_loop_rollout_data,
+    ground_truth_brt,
+)
+visualize_evaluated_rollout_stats(
+    evaluated_open_loop_out_of_distribution_rollouts,
+    title="Out-of-Distribution Open-Loop Rollout Evaluation",
 )

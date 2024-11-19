@@ -139,7 +139,7 @@ def visualize_env_failure_sets(env, config, figureFolder):
       plt.pause(0.001)
     plt.close()
 
-def construct_environment(config, visualize_failure_sets=True):
+def construct_environment(config, visualize_failure_sets=True, ood_dict={}):
   # == ARGS ==
   # == CONFIGURATION ==
   env_name = "dubins_car_img-v1"
@@ -227,6 +227,7 @@ def construct_environment(config, visualize_failure_sets=True):
   )
 
   # == Setting in this Environment ==
+  env.set_ood_dict(ood_dict)
   env.set_speed(speed=config.speed)
   env.set_constraint(radius=config.obs_r)
   env.set_radius_rotation(R_turn=config.speed/config.u_max)

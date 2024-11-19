@@ -732,7 +732,7 @@ class DubinsCarOneEnvImg(gym.Env):
       groundtruth_g_x = self.safety_margin(state_gt)
       if self.car.use_wm:
         learned_g_x = self.car.safety_margin(torch.Tensor(feat).to(self.device))
-        _update_metrics(learned_metrics, latent, learned_g_x, action_value)
+        _update_metrics(learned_metrics, latent.detach().cpu().numpy(), learned_g_x, action_value)
 
       # = Rollout Record
       _update_metrics(groundtruth_metrics, state_gt, groundtruth_g_x)

@@ -873,6 +873,7 @@ class DubinsCarOneEnvImg(gym.Env):
     scale = self.ood_dict.get('scale', 0.2)
     width = self.ood_dict.get('width', 0.05)
     background = self.ood_dict.get('background', 'white')
+    obstacle_color = self.ood_dict.get('obstacle_color', (1,0,0))
 
     # For simplicity, we create a blank image. In practice, this should render the environment.
     fig,ax = plt.subplots()
@@ -882,7 +883,7 @@ class DubinsCarOneEnvImg(gym.Env):
     fig.set_size_inches( 1, 1 )
     fig.patch.set_facecolor(background)
     # Create the circle patch
-    circle = patches.Circle(self.constraint_center, self.constraint_radius, edgecolor=(1,0,0), facecolor='none')
+    circle = patches.Circle(self.constraint_center, self.constraint_radius, edgecolor=obstacle_color, facecolor='none')
     # Add the circle patch to the axis
     dt = self.time_step
     v = self.speed

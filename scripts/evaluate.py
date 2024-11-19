@@ -334,18 +334,98 @@ run_all_evaluations(
 )
 
 # %%
-# out-of-distribution evaluation
+# out-of-distribution evaluation with cyan background
 # use the `ood_dict` to override certain visual properties of the environment
-out_of_distribution_env, _ = RARL_wm.construct_environment(
+cyanbg_ood_env, _ = RARL_wm.construct_environment(
     config, visualize_failure_sets=False, ood_dict={"background": (0, 1, 1)}
 )
 # render OOD appearance
-Image.fromarray(out_of_distribution_env.capture_image())
+Image.fromarray(cyanbg_ood_env.capture_image())
 run_all_evaluations(
-    out_of_distribution_env,
+    cyanbg_ood_env,
     agent,
     ground_truth_brt,
-    "out-of-distribution",
+    "cyanbg-ood",
+    position_gridsize=position_gridsize,
+    angle_gridsize=angle_gridsize,
+    # reproduce_closed_loop_rollouts=False,
+    # reproduce_open_loop_rollouts=False,
+    # reproduce_value_function=False,
+)
+
+# %%
+# out-of-distribution evaluation with magenta background
+# use the `ood_dict` to override certain visual properties of the environment
+magentabg_ood_env, _ = RARL_wm.construct_environment(
+    config, visualize_failure_sets=False, ood_dict={"background": (1, 0, 1)}
+)
+# render OOD appearance
+Image.fromarray(magentabg_ood_env.capture_image())
+run_all_evaluations(
+    magentabg_ood_env,
+    agent,
+    ground_truth_brt,
+    "magentabg-ood",
+    position_gridsize=position_gridsize,
+    angle_gridsize=angle_gridsize,
+    # reproduce_closed_loop_rollouts=False,
+    # reproduce_open_loop_rollouts=False,
+    # reproduce_value_function=False,
+)
+
+# %%
+# out-of-distribution evaluation with different scale
+# use the `ood_dict` to override certain visual properties of the environment
+scaled01_ood_env, _ = RARL_wm.construct_environment(
+    config, visualize_failure_sets=False, ood_dict={"scale": 0.1}
+)
+# render OOD appearance
+Image.fromarray(scaled01_ood_env.capture_image())
+run_all_evaluations(
+    scaled01_ood_env,
+    agent,
+    ground_truth_brt,
+    "scaled01-ood",
+    position_gridsize=position_gridsize,
+    angle_gridsize=angle_gridsize,
+    # reproduce_closed_loop_rollouts=False,
+    # reproduce_open_loop_rollouts=False,
+    # reproduce_value_function=False,
+)
+
+# %%
+# out-of-distribution evaluation with magenta obstacles
+# use the `ood_dict` to override certain visual properties of the environment
+magentaobs_ood_env, _ = RARL_wm.construct_environment(
+    config, visualize_failure_sets=False, ood_dict={"obstacle_color": (1, 0, 1)}
+)
+# render OOD appearance
+Image.fromarray(magentaobs_ood_env.capture_image())
+run_all_evaluations(
+    magentaobs_ood_env,
+    agent,
+    ground_truth_brt,
+    "magentaobs-ood",
+    position_gridsize=position_gridsize,
+    angle_gridsize=angle_gridsize,
+    # reproduce_closed_loop_rollouts=False,
+    # reproduce_open_loop_rollouts=False,
+    # reproduce_value_function=False,
+)
+
+# %%
+# out-of-distribution evaluation with yellow obstacles
+# use the `ood_dict` to override certain visual properties of the environment
+yellowobs_ood_env, _ = RARL_wm.construct_environment(
+    config, visualize_failure_sets=False, ood_dict={"obstacle_color": (1, 1, 0)}
+)
+# render OOD appearance
+Image.fromarray(yellowobs_ood_env.capture_image())
+run_all_evaluations(
+    yellowobs_ood_env,
+    agent,
+    ground_truth_brt,
+    "yellowobs-ood",
     position_gridsize=position_gridsize,
     angle_gridsize=angle_gridsize,
     # reproduce_closed_loop_rollouts=False,

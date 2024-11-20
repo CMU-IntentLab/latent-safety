@@ -174,9 +174,6 @@ def evaluate_rollout_data(env, rollout_data, ground_truth_brt):
                 and (learned_safety_time <= ground_truth_failure_time)
             )
 
-            if not is_learning_classification_correct:
-                asdf = 1
-
             # aggregate all the data
             evaluated_rollout_data.append(
                 {

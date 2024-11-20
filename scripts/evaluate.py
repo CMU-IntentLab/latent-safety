@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from safety_rl.RARL.utils import save_obj, load_obj
 from PIL import Image
+
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 import IPython
@@ -245,7 +246,9 @@ def run_all_evaluations(
     value_function_metrics_path = os.path.join(
         output_folder, experiment_name + "_value_function_metrics"
     )
-    if reproduce_value_function:
+    if reproduce_value_function or not os.path.exists(
+        f"{value_function_metrics_path}.pkl"
+    ):
         value_function_metrics = compute_value_funtion_metrics(
             env, ground_truth_brt, agent.Q_network
         )
@@ -259,7 +262,9 @@ def run_all_evaluations(
     closed_loop_rollout_data_path = os.path.join(
         output_folder, experiment_name + "closed_loop_rollout_data"
     )
-    if reproduce_closed_loop_rollouts:
+    if reproduce_closed_loop_rollouts or not os.path.exists(
+        f"{closed_loop_rollout_data_path}.pkl"
+    ):
         rollout_data = collect_rollout_data(
             env,
             agent,
@@ -282,7 +287,9 @@ def run_all_evaluations(
         output_folder,
         experiment_name + "open_loop_rollout_data",
     )
-    if reproduce_open_loop_rollouts:
+    if reproduce_open_loop_rollouts or not os.path.exists(
+        f"{open_loop_rollout_data_path}.pkl"
+    ):
         open_loop_rollout_data = collect_rollout_data(
             env,
             agent,
@@ -374,7 +381,8 @@ for experiment_name, experiment_setup in experiment_setups.items():
         experiment_name=experiment_name,
         position_gridsize=position_gridsize,
         angle_gridsize=angle_gridsize,
-        # reproduce_closed_loop_rollouts=False,
-        # reproduce_open_loop_rollouts=False,
-        # reproduce_value_function=False,
+        reproduce_closed_loop_rollouts=False,
+        reproduce_open_loop_rollouts=False,
+        reproduce_value_function=False,
     )
+# %%

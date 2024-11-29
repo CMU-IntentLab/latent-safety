@@ -426,10 +426,30 @@ offsetx_ood_config = RARL_wm.get_config(parse_args=False, root_key="offsetx_ood"
 offsetx_ood_env, _ = RARL_wm.construct_environment(
     offsetx_ood_config, visualize_failure_sets=False
 )
-offsetx_odd_brt = np.load(offsetx_ood_config.grid_path)
+offsetx_ood_brt = np.load(offsetx_ood_config.grid_path)
 experiment_setups["offsetx_ood"] = {
     "env": offsetx_ood_env,
-    "ground_truth_brt": offsetx_odd_brt,
+    "ground_truth_brt": offsetx_ood_brt,
+}
+
+offsety_ood_config = RARL_wm.get_config(parse_args=False, root_key="offsety_ood")
+offsety_ood_env, _ = RARL_wm.construct_environment(
+    offsety_ood_config, visualize_failure_sets=False
+)
+offsety_ood_brt = np.load(offsety_ood_config.grid_path)
+experiment_setups["offsety_ood"] = {
+    "env": offsety_ood_env,
+    "ground_truth_brt": offsety_ood_brt,
+}
+
+offsetr_ood_config = RARL_wm.get_config(parse_args=False, root_key="offsetr_ood")
+offsetr_ood_env, _ = RARL_wm.construct_environment(
+    offsetr_ood_config, visualize_failure_sets=False
+)
+offsetr_ood_brt = np.load(offsetr_ood_config.grid_path)
+experiment_setups["offsetr_ood"] = {
+    "env": offsetr_ood_env,
+    "ground_truth_brt": offsetr_ood_brt,
 }
 
 

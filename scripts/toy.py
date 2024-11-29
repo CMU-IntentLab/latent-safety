@@ -22,7 +22,6 @@ from optimized_dp.odp.dynamics import DubinsCar
 # Plot options
 from optimized_dp.odp.Plots import PlotOptions
 from optimized_dp.odp.Plots import plot_isosurface, plot_valuefunction
-
 # Solver core
 from optimized_dp.odp.solver import HJSolver, computeSpatDerivArray
 from networks.mlp import MLP
@@ -83,12 +82,12 @@ def main(config, experiment_prefix):
     )
 
     po2 = PlotOptions(
-        do_plot=False,
+        do_plot=True,
         plot_type="set",
         plotDims=[0, 1, 2],
         slicesCut=[],
-        save_fig=False,
-        filename="/logs/grid/plot.png",
+        save_fig=True,
+        filename = "logs/grid/plot.png" if not experiment_prefix else f"logs/grid/{experiment_prefix}_plot.png",
     )
 
     compMethods = {

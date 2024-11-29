@@ -288,4 +288,4 @@ offsety_ood:
 offsetr_ood:
   obs_x: 0.0
   obs_y: 0.0
-  obs_r: 0.6
+  obs_r: 1.0

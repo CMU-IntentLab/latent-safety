@@ -276,19 +276,19 @@ defaults:
   #warm-start-path: null # type=str, default=None) # e.g., log/ra_droneracing_Game-v6/epoch_id_10/policy.pth
 
 offsetx_ood:
-  grid_path: /home/lassepe/worktree/latent-safety/logs/grid/LS_BRT_v_offsetx_ood1_w1.25.25.npy
+  grid_path: /home/lassepe/worktree/latent-safety/logs/grid/LS_BRT_v_offsetx_ood1_w1.25.npy
   obs_x: 0.5
   obs_y: 0.0
   obs_r: 0.5
 
 offsety_ood:
-  grid_path: /home/lassepe/worktree/latent-safety/logs/grid/LS_BRT_v_offsety_ood1_w1.25.25.npy
+  grid_path: /home/lassepe/worktree/latent-safety/logs/grid/LS_BRT_v_offsety_ood1_w1.25.npy
   obs_x: 0.0
   obs_y: 0.5
   obs_r: 0.5
 
 offsetr_ood:
-  grid_path: /home/lassepe/worktree/latent-safety/logs/grid/LS_BRT_v_offsetr_ood1_w1.25.25.npy
+  grid_path: /home/lassepe/worktree/latent-safety/logs/grid/LS_BRT_v_offsetr_ood1_w1.25.npy
   obs_x: 0.0
   obs_y: 0.0
   obs_r: 1.0

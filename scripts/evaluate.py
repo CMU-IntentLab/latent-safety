@@ -287,7 +287,7 @@ def evaluate(
     show_plots=True,
 ):
     output_folder = os.path.join(
-        project_root, environment_info["outFolder"], experiment_name
+        project_root, default_environment_info["outFolder"], experiment_name
     )
     os.makedirs(output_folder, exist_ok=True)
 
@@ -369,10 +369,10 @@ def evaluate(
 position_gridsize = 10
 angle_gridsize = 3
 default_config = RARL_wm.get_config(parse_args=False)
-base_env, environment_info = RARL_wm.construct_environment(
+default_env, default_environment_info = RARL_wm.construct_environment(
     default_config, visualize_failure_sets=False
 )
-agent = load_best_agent(default_config, environment_info)
+agent = load_best_agent(default_config, default_environment_info)
 default_ground_truth_brt = np.load(default_config.grid_path)
 
 # %%
@@ -380,7 +380,7 @@ experiment_setups = {}
 # -------------------------------------------------------appearance ood setups
 # in-distribution setup
 experiment_setups["nominal"] = {
-    "env": base_env,
+    "env": default_env,
     "ground_truth_brt": default_ground_truth_brt,
 }
 
@@ -426,10 +426,10 @@ offsetx_ood_config = RARL_wm.get_config(parse_args=False, root_key="offsetx_ood"
 offsetx_ood_env, _ = RARL_wm.construct_environment(
     offsetx_ood_config, visualize_failure_sets=False
 )
-offsetx_odd_brt = np.load(default_config.grid_path)
+offsetx_odd_brt = np.load(offsetx_ood_config.grid_path)
 experiment_setups["offsetx_ood"] = {
     "env": offsetx_ood_env,
-    "ground_truth_brt": None,
+    "ground_truth_brt": offsetx_odd_brt,
 }
 
 

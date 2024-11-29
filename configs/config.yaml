@@ -1,5 +1,4 @@
 defaults:
-
   logdir: "logs/dreamer_dubins"
   traindir: null
   evaldir: null
@@ -275,3 +274,18 @@ defaults:
   #critic-activation: 'ReLU' # type=str, default='ReLU')
   #kwargs: {} # type=str, default='{}')
   #warm-start-path: null # type=str, default=None) # e.g., log/ra_droneracing_Game-v6/epoch_id_10/policy.pth
+
+offsetx_ood:
+  obs_x: 0.5
+  obs_y: 0.0
+  obs_r: 0.5
+
+offsety_ood:
+  obs_x: 0.0
+  obs_y: 0.5
+  obs_r: 0.5
+
+offsetr_ood:
+  obs_x: 0.0
+  obs_y: 0.0
+  obs_r: 0.6

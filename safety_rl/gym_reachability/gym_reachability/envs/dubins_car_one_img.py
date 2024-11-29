@@ -81,6 +81,10 @@ class DubinsCarOneEnvImg(gym.Env):
         })
 
     # Constraint set parameters.
+    print(f"config.obs_x: {config.obs_x}")
+    print(f"config.obs_y: {config.obs_y}")
+    print(f"config.obs_r: {config.obs_r}")
+
     self.constraint_center = np.array([config.obs_x, config.obs_y])
     self.constraint_radius = config.obs_r
 

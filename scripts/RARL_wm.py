@@ -229,7 +229,7 @@ def construct_environment(config, visualize_failure_sets=True, ood_dict={}):
   # == Setting in this Environment ==
   env.set_ood_dict(ood_dict)
   env.set_speed(speed=config.speed)
-  env.set_constraint(radius=config.obs_r)
+  env.set_constraint(center=np.array([config.obs_x, config.obs_y]), radius=config.obs_r)
   env.set_radius_rotation(R_turn=config.speed/config.u_max)
   print("Dynamic parameters:")
   print("  CAR", end='\n    ')
@@ -501,7 +501,7 @@ def RARL(config):
 
   evaluate_training(trainRecords, trainProgress, env, agent, environment_info)
 
-def get_config(parse_args=True):
+def get_config(parse_args=True, root_key="defaults"):
   parser = argparse.ArgumentParser()
   parser.add_argument("--configs", nargs="+")
   parser.add_argument("--expt_name", type=str, default=None)
@@ -522,8 +522,7 @@ def get_config(parse_args=True):
       (pathlib.Path(parent_dir) / "configs/config.yaml").read_text()
   )
 
-  name_list = ["defaults", *config.configs] if config.configs else ["defaults"]
-
+  name_list = ["defaults", *config.configs] if config.configs else ["defaults", root_key]
   defaults = {}
   for name in name_list:
       recursive_update(defaults, configs[name])

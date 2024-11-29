@@ -106,22 +106,6 @@ def main(config, experiment_prefix):
         accuracy="medium",
     )
 
-    # lin = np.linspace(-np.pi, np.pi, num=40, endpoint=True)
-    # thetas = [np.pi / 6, np.pi / 3, np.pi / 2]
-    # for theta in thetas:
-    #     diff_lin = np.abs(lin - theta)
-    #     idx = np.argmin(diff_lin)
-    #     diff = lin[idx] - theta
-    #     if diff > 0:
-    #         idx2 = idx - 1
-    #         diff2 = theta - lin[idx2]
-    #         w2 = diff / (diff + diff2)
-    #     else:
-    #         idx2 = idx + 1
-    #         diff2 = lin[idx2] - theta
-    #         w2 = -diff / (-diff + diff2)
-    #     w1 = 1 - w2
-
     path = (
         "logs/grid/LS_BRT_v"
         + ("_" + experiment_prefix if experiment_prefix else "")

@@ -8,6 +8,7 @@ import RARL_wm
 import math
 import numpy as np
 import pandas as pd
+import torch
 from safety_rl.RARL.utils import save_obj, load_obj
 from PIL import Image
 
@@ -183,10 +184,60 @@ def evaluate_rollout_data(env, rollout_data, ground_truth_brt):
                     "is_feasible": is_feasible,
                     "is_safe": is_safe,
                     "is_learning_classification_correct": is_learning_classification_correct,
+                    "learned_metrics": learned_metrics,
                 }
             )
 
     return pd.DataFrame(evaluated_rollout_data)
+
+def generate_representative_rollout_videos(env, evaluated_rollouts, output_folder, output_prefix):
+    # find up to 5 safe and 5 unsafe rollouts and generate a video for each of them
+
+    safe_rollouts = evaluated_rollouts[evaluated_rollouts["is_safe"]].head(5)
+    for idx, row in safe_rollouts.iterrows():
+        print(f"Generating video for safe rollout {idx}")
+        rollout_data = row["learned_metrics"]
+        decode_video_from_feature_sequence(env, rollout_data, os.path.join(output_folder, f"{output_prefix}_safe_{idx}.mp4"))
+
+    unsafe_rollouts = evaluated_rollouts[~evaluated_rollouts["is_safe"]].head(5)
+    for idx, row in unsafe_rollouts.iterrows():
+        print(f"Generating video for unsafe rollout {idx}")
+        rollout_data = row["learned_metrics"]
+        decode_video_from_feature_sequence(env, rollout_data, os.path.join(output_folder, f"{output_prefix}_unsafe_{idx}.mp4"))
+
+
+def video_from_array(image_sequence_array, output_filename = "output_video.mp4"):
+    import cv2
+    # Assuming `image_sequence` is your tensor with shape (time, height, width, 3)
+    # Normalize the image values to [0, 255] if they are not already in this range
+    image_sequence_array = (image_sequence_array * 255).clip(0, 255).astype(np.uint8)
+
+    # Define video properties
+    height, width, _ = image_sequence_array.shape[1:]
+    fps = 30  # Set frames per second
+
+    # Create a VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # Codec for MP4
+    video_writer = cv2.VideoWriter(output_filename, fourcc, fps, (width, height))
+
+    # Write frames to the video
+    for frame in image_sequence_array:
+        video_writer.write(frame)
+
+    # Release the VideoWriter
+    video_writer.release()
+
+    print(f"Video saved as {output_filename}")
+    return output_filename
+
+
+def decode_video_from_feature_sequence(env, rollout, output_filename):
+    # feature_sequence_batch = torch.FloatTensor(d["learned_metrics"]["traj"]).to(env.device).squeeze(1)
+    # layout: (batch, time, features)
+    feature_sequence_batch = torch.FloatTensor(rollout["traj"]).to(env.device).unsqueeze(0).squeeze(2)
+    image_sequence = env.car.wm.heads["decoder"](feature_sequence_batch)["image"].mode().squeeze(0).cpu().detach().numpy()
+    # convert tensor of (time, npx, npy, 3) to mp4 video
+    video_from_array(image_sequence, output_filename)
 
 
 def visualize_evaluated_rollout_stats(evaluated_rollouts, title):
@@ -222,7 +273,7 @@ def visualize_evaluated_rollout_stats(evaluated_rollouts, title):
     return fig
 
 
-def run_all_evaluations(
+def evaluate(
     env,
     agent,
     ground_truth_brt,
@@ -232,6 +283,7 @@ def run_all_evaluations(
     reproduce_value_function=True,
     reproduce_closed_loop_rollouts=True,
     reproduce_open_loop_rollouts=True,
+    generate_videos=True,
     show_plots=True,
 ):
     output_folder = os.path.join(
@@ -276,6 +328,8 @@ def run_all_evaluations(
     plt = visualize_evaluated_rollout_stats(
         evaluated_rollouts, title=f"{experiment_name} Closed-Loop Rollout Evaluation"
     )
+    if generate_videos:
+        generate_representative_rollout_videos(env, evaluated_rollouts, output_folder, experiment_name)
     if the_ipython_instance is not None and show_plots:
         IPython.display.display(plt)
 
@@ -305,6 +359,8 @@ def run_all_evaluations(
         evaluated_open_loop_rollouts,
         title=f"{experiment_name} Open-Loop Rollout Evaluation",
     )
+    if generate_videos:
+        generate_representative_rollout_videos(env, evaluated_open_loop_rollouts, output_folder, f"open_loop_{experiment_name}")
     if the_ipython_instance is not None and show_plots:
         IPython.display.display(plt)
 
@@ -371,7 +427,7 @@ for experiment_name, experiment_setup in experiment_setups.items():
     img = Image.fromarray(experiment_setup["env"].capture_image())
     if the_ipython_instance is not None:
         IPython.display.display(img)
-    run_all_evaluations(
+    evaluate(
         env=experiment_setup["env"],
         agent=agent,
         ground_truth_brt=experiment_setup["ground_truth_brt"],
@@ -382,4 +438,3 @@ for experiment_name, experiment_setup in experiment_setups.items():
         reproduce_open_loop_rollouts=False,
         reproduce_value_function=False,
     )
-# %%

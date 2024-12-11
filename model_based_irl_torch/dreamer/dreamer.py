@@ -476,13 +476,18 @@ class Dreamer(nn.Module):
         img_array = np.array(img)
         plt.close()
         return img_array
-    def get_eval_plot(self, obs_mlp, theta):
+
+    def evaluate_classifier(self, obs_mlp, theta=None):
         nx, ny, nz = 41, 41, 5
+        if theta is None:
+            thetas = np.linspace(0, 2*np.pi, nz, endpoint=True)
+        else:
+            nz = 1
+            thetas = np.array([theta])
 
         v = np.zeros((nx, ny, nz))
         xs = np.linspace(-1, 1, nx)
         ys = np.linspace(-1, 1, ny)
-        thetas= np.linspace(0, 2*np.pi, nz, endpoint=True)
         tn, tp, fn, fp = 0, 0, 0, 0
         it = np.nditer(v, flags=['multi_index'])
         ###
@@ -505,15 +510,13 @@ class Dreamer(nn.Module):
             idxs.append(idx)        
             it.iternext()
         idxs = np.array(idxs)
-        safe_idxs = np.where(np.array(labels) == 0)
-        unsafe_idxs = np.where(np.array(labels) == 1)
         x_lin = xs[idxs[:,0]]
         y_lin = ys[idxs[:,1]]
         theta_lin = thetas[idxs[:,2]]
         
         g_x = []
         ## all of this is because I can't do a forward pass with 128x128 images in one go
-        num_c = 5
+        num_c = nz
         chunk = int(np.shape(x_lin)[0]/num_c)
         for k in range(num_c):
             g_xlist, _, _ = self.get_latent(x_lin[k*chunk:(k+1)*chunk], y_lin[k*chunk:(k+1)*chunk], theta_lin[k*chunk:(k+1)*chunk], imgs[k*chunk:(k+1)*chunk], obs_mlp)
@@ -521,52 +524,66 @@ class Dreamer(nn.Module):
         g_x = np.array(g_x)
         v[idxs[:, 0], idxs[:, 1], idxs[:, 2]] = g_x
 
-        #g_x, _, _ = self.get_latent(x_lin, y_lin, theta_lin, imgs, obs_mlp)
-        #v[idxs[:, 0], idxs[:, 1], idxs[:, 2]] = g_x
+        return {
+            "v": v,
+            "g_x": g_x,
+            "labels": labels,
+        }
+
+    def plot_classifier_evaluation(self, v, g_x, labels):
+        _, _, nz = v.shape
+        fig, axes = plt.subplots(nz, 2, figsize=(12, nz*6))
+        vmax = round(max(np.max(v), 0),1)
+        vmin = round(min(np.min(v), -vmax),1)
+        safe_idxs = np.where(np.array(labels) == 0)
+        unsafe_idxs = np.where(np.array(labels) == 1)
         tp  = np.where(g_x[safe_idxs] > 0)
         fn  = np.where(g_x[safe_idxs] <= 0)
         fp  = np.where(g_x[unsafe_idxs] > 0)
         tn  = np.where(g_x[unsafe_idxs] <= 0)
         
-        vmax = round(max(np.max(v), 0),1)
-        vmin = round(min(np.min(v), -vmax),1)
-        
-        fig, axes = plt.subplots(nz, 2, figsize=(12, nz*6))
-        
         for i in range(nz):
-            ax = axes[i, 0]
-            im = ax.imshow(
+            if nz > 1:
+                ax0 = axes[i, 0]
+            else:
+                ax0 = axes[0]
+
+            im = ax0.imshow(
                 v[:, :, i].T, interpolation='none', extent=np.array([
                 -1.1, 1.1, -1.1,1.1, ]), origin="lower",
                 cmap="seismic", vmin=vmin, vmax=vmax, zorder=-1
             )
             cbar = fig.colorbar(
-                im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
+                im, ax=ax0, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
             )
             cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=24)
-            ax.set_title(r'$g(x)$', fontsize=18)
+            ax0.set_title(r'$g(x)$', fontsize=18)
 
-            ax = axes[i, 1]
-            im = ax.imshow(
+            if nz > 1:
+                ax1 = axes[i, 1]
+            else:
+                ax1 = axes[1]
+
+            im = ax1.imshow(
                 v[:, :, i].T > 0, interpolation='none', extent=np.array([
                 -1.1, 1.1, -1.1,1.1, ]), origin="lower",
                 cmap="seismic", vmin=-1, vmax=1, zorder=-1
             )
             cbar = fig.colorbar(
-                im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
+                im, ax=ax1, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
             )
             cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=24)
-            ax.set_title(r'$v(x)$', fontsize=18)
+            ax1.set_title(r'$v(x)$', fontsize=18)
             fig.tight_layout()
             circle = plt.Circle((0, 0), 0.5, fill=False, color='blue', label = 'GT boundary')
 
             # Add the circle to the plot
-            axes[i,0].add_patch(circle)
-            axes[i,0].set_aspect('equal')
+            ax0.add_patch(circle)
+            ax0.set_aspect('equal')
             circle2 = plt.Circle((0, 0), 0.5, fill=False, color='blue', label = 'GT boundary')
 
-            axes[i,1].add_patch(circle2)
-            axes[i,1].set_aspect('equal')
+            ax1.add_patch(circle2)
+            ax1.set_aspect('equal')
 
         fp_g = np.shape(fp)[1]
         fn_g = np.shape(fn)[1]
@@ -582,8 +599,10 @@ class Dreamer(nn.Module):
         buf.seek(0)
         plot = Image.open(buf).convert("RGB")
         return np.array(plot), tp, fn, fp, tn
-        
-    ###
+    
+    def get_eval_plot(self, obs_mlp, theta=None):
+        eval_result = self.evaluate_classifier(obs_mlp, theta)
+        return self.plot_classifier_evaluation(eval_result["v"], eval_result["g_x"], eval_result["labels"])
 
     def train_lx(self, data, lx_mlp, lx_opt, eval=False):
         wm = self._wm
@@ -622,7 +641,7 @@ class Dreamer(nn.Module):
                     score = 0
             else:
                 lx_mlp.eval()
-                plot_arr, tp, fn, fp, tn = self.get_eval_plot(lx_mlp, 0)
+                plot_arr, tp, fn, fp, tn = self.get_eval_plot(lx_mlp)
                 '''safe_pts = data['privileged_state'][safe_data]
                 unsafe_pts = data['privileged_state'][unsafe_data]
 

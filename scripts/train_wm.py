@@ -52,188 +52,21 @@ from gym import spaces
 from gym.spaces import Discrete 
 import gym
 
+
 def train_eval(config):
-    tools.set_seed_everywhere(config.seed)
-    if config.deterministic_run:
-        tools.enable_deterministic_run()
-    logdir = pathlib.Path(config.logdir).expanduser()
-    config.steps //= config.action_repeat
-    config.eval_every //= config.action_repeat
-    config.log_every //= config.action_repeat
-    config.time_limit //= config.action_repeat
+    # ==================== Set up training ====================
+    training_setup = set_up_dreamer_training(config)
+    logger = training_setup["logger"]
+    agent = training_setup["agent"]
+    train_envs = training_setup["train_envs"]
+    eval_envs = training_setup["eval_envs"]
+    eval_dataset = training_setup["eval_dataset"]
+    obs_train_dataset = training_setup["obs_train_dataset"]
+    obs_eval_dataset = training_setup["obs_eval_dataset"]
+    logdir = training_setup["logdir"]
+    train_eps = training_setup["train_eps"]
+    expert_dataset = training_setup["expert_dataset"]
 
-    # ==================== Logging ====================
-    print("Logdir", logdir)
-    logdir.mkdir(parents=True, exist_ok=True)
-    with open(f"{logdir}/config.yaml", "w") as f:
-        yaml.dump(vars(config), f)
-    # step in logger is environmental step
-    config.traindir = config.traindir or logdir / "train_eps"
-    config.evaldir = config.evaldir or logdir / "eval_eps"
-    config.traindir.mkdir(parents=True, exist_ok=True)
-    config.evaldir.mkdir(parents=True, exist_ok=True)
-    step = count_steps(config.traindir)
-    if config.debug:
-        logger = tools.DebugLogger(logdir, config.action_repeat * step)
-    else:
-        logger = tools.Logger(logdir, config.action_repeat * step)
-    logger.config(vars(config))
-    logger.write()
-
-    # ==================== Create dataset ====================
-    # expert replay buffer
-    expert_eps = collections.OrderedDict()
-    print(expert_eps)
-    tools.fill_expert_dataset_dubins(config, expert_eps)
-    expert_dataset = make_dataset(expert_eps, config)
-    # validation replay buffer
-    expert_val_eps = collections.OrderedDict()
-    tools.fill_expert_dataset_dubins(config, expert_val_eps, is_val_set=True)
-
-    # split expert dataset into train and eval
-    obs_train_eps = collections.OrderedDict()
-    obs_eval_eps = collections.OrderedDict()
-    for i, (key, value) in enumerate(expert_eps.items()):
-        if i < int(len(expert_eps) * 0.7):
-            obs_train_eps[key] = value
-        else:
-            obs_eval_eps[key] = value
-
-    obs_eval_dataset = make_dataset(obs_eval_eps, config)
-    obs_train_dataset = make_dataset(obs_train_eps, config)
-
-    # learner + eval replay buffer
-    if config.offline_traindir:
-        # possibly replace 'data/{dataset}/{model}" with keys in config
-        directory = config.offline_traindir.format(**vars(config))
-    else:
-        directory = config.traindir
-    train_eps = tools.load_episodes(directory, limit=config.prefill)
-    if config.offline_evaldir:
-        directory = config.offline_evaldir.format(**vars(config))
-    else:
-        directory = config.evaldir
-    eval_eps = tools.load_episodes(directory, limit=1)
-    train_dataset = make_dataset(train_eps, config)
-    eval_dataset = make_dataset(expert_val_eps, config)
-
-    # ==================== Create envs ====================
-    
-
-
-    # == CONFIGURATION ==
-    #env_name = "dubins_car_img_cont-v1"
-    env_name = "dubins_car_img-v1" # showing Lasse the DDQN version
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    maxUpdates = config.maxUpdates
-    updateTimes = config.updateTimes
-    updatePeriod = int(maxUpdates / updateTimes)
-    updatePeriodHalf = int(updatePeriod / 2)
-
-    # == Environment ==
-    print("\n== Environment Information ==")
-    if config.doneType == 'toEnd':
-        sample_inside_obs = True
-    elif config.doneType == 'TF' or config.doneType == 'fail':
-        sample_inside_obs = False
-
-    print(env_name)
-    print(gym_reachability)
-    train_env = gym.make(
-        env_name, config=config, device=device, mode=config.mode, doneType=config.doneType,
-        sample_inside_obs=sample_inside_obs
-    )
-
-    print(train_env.observation_space)
-    print(train_env.action_space)
-    train_envs = [train_env]
-    eval_env = gym.make(
-        env_name, config=config, device=device, mode=config.mode, doneType=config.doneType,
-        sample_inside_obs=sample_inside_obs
-    )
-    eval_envs = [eval_env]
-
-    '''train_envs = [make_env(config) for i in range(config.envs)]
-    eval_envs = [make_env(config) for i in range(config.envs)]
-    if config.parallel:
-        train_envs = [Parallel(env, "process") for env in train_envs]
-        eval_envs = [Parallel(env, "process") for env in eval_envs]
-    else:
-        train_envs = [Damy(env) for env in train_envs]
-        eval_envs = [Damy(env) for env in eval_envs]
-    acts = train_envs[0].action_space'''
-    ### TODO: CLEAN ABOVE ###
-    acts = train_envs[0].action_space
-    bounds = np.array([[-1.1, 1.1], [-1.1, 1.1], [0, 2 * np.pi]])
-    low = bounds[:, 0]
-    high = bounds[:, 1]
-
-    # Gym variables.
-    midpoint = (low + high) / 2.0
-    interval = high -low
-    observation_space = spaces.Box(
-        np.float32(midpoint - interval/2),
-        np.float32(midpoint + interval/2),
-    )
-
-    print(f"Action Space: {acts}.")# Low: {acts.low}. High: {acts.high}")
-    config.num_actions = acts.n if hasattr(acts, "n") else acts.shape[0]
-
-    # ==================== Create Agent ====================
-    agent = Dreamer(
-        train_envs[0].observation_space,
-        train_envs[0].action_space,
-        config,
-        logger,
-        train_dataset,
-        expert_dataset=expert_dataset if config.hybrid_training else None,
-    ).to(config.device)
-    agent.requires_grad_(requires_grad=False)
-    if config.from_ckpt and Path(config.from_ckpt).exists():
-        print(f"Loading ckpt from {config.from_ckpt}")
-        checkpoint = torch.load(config.from_ckpt)
-        if config.critic_ensemble_size > 1 or config.reward_ensemble_size > 1:
-            # only false if loading with different ensemble size
-            mk, uk = agent.load_state_dict(checkpoint["agent_state_dict"], strict=False)
-            for k in mk:
-                assert (
-                    "Value" in k
-                    or "_slow_value" in k
-                    or "value" in k
-                    or "Reward" in k
-                    or "reward" in k
-                )
-            for k in uk:
-                assert (
-                    "Value" in k
-                    or "_slow_value" in k
-                    or "value" in k
-                    or "Reward" in k
-                    or "reward" in k
-                )
-        else:
-            agent.load_state_dict(checkpoint["agent_state_dict"])
-        try:
-            tools.recursively_load_optim_state_dict(
-                agent, checkpoint["optims_state_dict"]
-            )
-        except Exception as e:
-            # likely due to mismatch in pretrain optimizers
-            print("Failed to load optim state dict", e)
-
-        pretrained_ckpt_config = Path(config.from_ckpt).parent / "config.yaml"
-        if pretrained_ckpt_config.exists():
-            pretrained_config = yaml.load(pretrained_ckpt_config.read_text())
-            if pretrained_config["num_exp_trajs"] == config.num_exp_trajs:
-                warnings.warn(
-                    f"Mismatch in number of expert trajectories in pretrained config {pretrained_config['num_exp_trajs']} and actual {config.num_exp_trajs}"
-                )
-
-        agent._should_pretrain._once = False
-        if config.from_ckpt and config.pretrain_ema:
-            print("Using EMA weights from pretraining")
-            agent.ema.load_state_dict(checkpoint["ema"])
-            agent.ema.copy_to(agent._task_behavior.actor.parameters())
 
     # ==================== Training Fns ====================
     def log_plot(title, data):
@@ -567,6 +400,204 @@ def train_eval(config):
         logger.write()
     '''
     close_envs(train_envs + eval_envs)
+
+def set_up_dreamer_training(config):
+    tools.set_seed_everywhere(config.seed)
+    if config.deterministic_run:
+        tools.enable_deterministic_run()
+    logdir = pathlib.Path(config.logdir).expanduser()
+    config.steps //= config.action_repeat
+    config.eval_every //= config.action_repeat
+    config.log_every //= config.action_repeat
+    config.time_limit //= config.action_repeat
+
+    # ==================== Logging ====================
+    print("Logdir", logdir)
+    logdir.mkdir(parents=True, exist_ok=True)
+    with open(f"{logdir}/config.yaml", "w") as f:
+        yaml.dump(vars(config), f)
+    # step in logger is environmental step
+    config.traindir = config.traindir or logdir / "train_eps"
+    config.evaldir = config.evaldir or logdir / "eval_eps"
+    config.traindir.mkdir(parents=True, exist_ok=True)
+    config.evaldir.mkdir(parents=True, exist_ok=True)
+    step = count_steps(config.traindir)
+    if config.debug:
+        logger = tools.DebugLogger(logdir, config.action_repeat * step)
+    else:
+        logger = tools.Logger(logdir, config.action_repeat * step)
+    logger.config(vars(config))
+    logger.write()
+
+    # ==================== Create dataset ====================
+    # expert replay buffer
+    expert_eps = collections.OrderedDict()
+    print(expert_eps)
+    tools.fill_expert_dataset_dubins(config, expert_eps)
+    expert_dataset = make_dataset(expert_eps, config)
+    # validation replay buffer
+    expert_val_eps = collections.OrderedDict()
+    tools.fill_expert_dataset_dubins(config, expert_val_eps, is_val_set=True)
+
+    # split expert dataset into train and eval
+    obs_train_eps = collections.OrderedDict()
+    obs_eval_eps = collections.OrderedDict()
+    for i, (key, value) in enumerate(expert_eps.items()):
+        if i < int(len(expert_eps) * 0.7):
+            obs_train_eps[key] = value
+        else:
+            obs_eval_eps[key] = value
+
+    obs_eval_dataset = make_dataset(obs_eval_eps, config)
+    obs_train_dataset = make_dataset(obs_train_eps, config)
+
+    # learner + eval replay buffer
+    if config.offline_traindir:
+        # possibly replace 'data/{dataset}/{model}" with keys in config
+        directory = config.offline_traindir.format(**vars(config))
+    else:
+        directory = config.traindir
+    train_eps = tools.load_episodes(directory, limit=config.prefill)
+    if config.offline_evaldir:
+        directory = config.offline_evaldir.format(**vars(config))
+    else:
+        directory = config.evaldir
+    eval_eps = tools.load_episodes(directory, limit=1)
+    train_dataset = make_dataset(train_eps, config)
+    eval_dataset = make_dataset(expert_val_eps, config)
+
+    # ==================== Create envs ====================
+
+    # == CONFIGURATION ==
+    #env_name = "dubins_car_img_cont-v1"
+    env_name = "dubins_car_img-v1" # showing Lasse the DDQN version
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    maxUpdates = config.maxUpdates
+    updateTimes = config.updateTimes
+    updatePeriod = int(maxUpdates / updateTimes)
+    updatePeriodHalf = int(updatePeriod / 2)
+
+    # == Environment ==
+    print("\n== Environment Information ==")
+    if config.doneType == 'toEnd':
+        sample_inside_obs = True
+    elif config.doneType == 'TF' or config.doneType == 'fail':
+        sample_inside_obs = False
+
+    print(env_name)
+    print(gym_reachability)
+    train_env = gym.make(
+        env_name, config=config, device=device, mode=config.mode, doneType=config.doneType,
+        sample_inside_obs=sample_inside_obs
+    )
+
+    print(train_env.observation_space)
+    print(train_env.action_space)
+    train_envs = [train_env]
+    eval_env = gym.make(
+        env_name, config=config, device=device, mode=config.mode, doneType=config.doneType,
+        sample_inside_obs=sample_inside_obs
+    )
+    eval_envs = [eval_env]
+
+    '''train_envs = [make_env(config) for i in range(config.envs)]
+    eval_envs = [make_env(config) for i in range(config.envs)]
+    if config.parallel:
+        train_envs = [Parallel(env, "process") for env in train_envs]
+        eval_envs = [Parallel(env, "process") for env in eval_envs]
+    else:
+        train_envs = [Damy(env) for env in train_envs]
+        eval_envs = [Damy(env) for env in eval_envs]
+    acts = train_envs[0].action_space'''
+    ### TODO: CLEAN ABOVE ###
+    acts = train_envs[0].action_space
+    bounds = np.array([[-1.1, 1.1], [-1.1, 1.1], [0, 2 * np.pi]])
+    low = bounds[:, 0]
+    high = bounds[:, 1]
+
+    # Gym variables.
+    midpoint = (low + high) / 2.0
+    interval = high -low
+    observation_space = spaces.Box(
+        np.float32(midpoint - interval/2),
+        np.float32(midpoint + interval/2),
+    )
+
+    print(f"Action Space: {acts}.")# Low: {acts.low}. High: {acts.high}")
+    config.num_actions = acts.n if hasattr(acts, "n") else acts.shape[0]
+
+    # ==================== Create Agent ====================
+    agent = Dreamer(
+        train_envs[0].observation_space,
+        train_envs[0].action_space,
+        config,
+        logger,
+        train_dataset,
+        expert_dataset=expert_dataset if config.hybrid_training else None,
+    ).to(config.device)
+    agent.requires_grad_(requires_grad=False)
+    if config.from_ckpt and Path(config.from_ckpt).exists():
+        print(f"Loading ckpt from {config.from_ckpt}")
+        checkpoint = torch.load(config.from_ckpt)
+        if config.critic_ensemble_size > 1 or config.reward_ensemble_size > 1:
+            # only false if loading with different ensemble size
+            mk, uk = agent.load_state_dict(checkpoint["agent_state_dict"], strict=False)
+            for k in mk:
+                assert (
+                    "Value" in k
+                    or "_slow_value" in k
+                    or "value" in k
+                    or "Reward" in k
+                    or "reward" in k
+                )
+            for k in uk:
+                assert (
+                    "Value" in k
+                    or "_slow_value" in k
+                    or "value" in k
+                    or "Reward" in k
+                    or "reward" in k
+                )
+        else:
+            agent.load_state_dict(checkpoint["agent_state_dict"])
+        try:
+            tools.recursively_load_optim_state_dict(
+                agent, checkpoint["optims_state_dict"]
+            )
+        except Exception as e:
+            # likely due to mismatch in pretrain optimizers
+            print("Failed to load optim state dict", e)
+
+        pretrained_ckpt_config = Path(config.from_ckpt).parent / "config.yaml"
+        if pretrained_ckpt_config.exists():
+            pretrained_config = yaml.load(pretrained_ckpt_config.read_text())
+            if pretrained_config["num_exp_trajs"] == config.num_exp_trajs:
+                warnings.warn(
+                    f"Mismatch in number of expert trajectories in pretrained config {pretrained_config['num_exp_trajs']} and actual {config.num_exp_trajs}"
+                )
+
+        agent._should_pretrain._once = False
+        if config.from_ckpt and config.pretrain_ema:
+            print("Using EMA weights from pretraining")
+            agent.ema.load_state_dict(checkpoint["ema"])
+            agent.ema.copy_to(agent._task_behavior.actor.parameters())
+
+
+    training_setup = {
+        "agent": agent,
+        "train_envs": train_envs,
+        "eval_envs": eval_envs,
+        "train_dataset": train_dataset,
+        "eval_dataset": eval_dataset,
+        "expert_dataset": expert_dataset,
+        "obs_train_dataset": obs_train_dataset,
+        "obs_eval_dataset": obs_eval_dataset,
+        "logger": logger,
+        "logdir": logdir,
+        "train_eps": train_eps,
+    }
+
+    return training_setup
 
 
 def close_envs(envs):

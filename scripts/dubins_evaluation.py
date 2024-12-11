@@ -11,6 +11,7 @@ import pandas as pd
 import torch
 from safety_rl.RARL.utils import save_obj, load_obj
 from PIL import Image
+import train_wm
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -190,24 +191,36 @@ def evaluate_rollout_data(env, rollout_data, ground_truth_brt):
 
     return pd.DataFrame(evaluated_rollout_data)
 
-def generate_representative_rollout_videos(env, evaluated_rollouts, output_folder, output_prefix):
+
+def generate_representative_rollout_videos(
+    env, evaluated_rollouts, output_folder, output_prefix
+):
     # find up to 5 safe and 5 unsafe rollouts and generate a video for each of them
 
     safe_rollouts = evaluated_rollouts[evaluated_rollouts["is_safe"]].head(5)
     for idx, row in safe_rollouts.iterrows():
         print(f"Generating video for safe rollout {idx}")
         rollout_data = row["learned_metrics"]
-        decode_video_from_feature_sequence(env, rollout_data, os.path.join(output_folder, f"{output_prefix}_safe_{idx}.mp4"))
+        decode_video_from_feature_sequence(
+            env,
+            rollout_data,
+            os.path.join(output_folder, f"{output_prefix}_safe_{idx}.mp4"),
+        )
 
     unsafe_rollouts = evaluated_rollouts[~evaluated_rollouts["is_safe"]].head(5)
     for idx, row in unsafe_rollouts.iterrows():
         print(f"Generating video for unsafe rollout {idx}")
         rollout_data = row["learned_metrics"]
-        decode_video_from_feature_sequence(env, rollout_data, os.path.join(output_folder, f"{output_prefix}_unsafe_{idx}.mp4"))
+        decode_video_from_feature_sequence(
+            env,
+            rollout_data,
+            os.path.join(output_folder, f"{output_prefix}_unsafe_{idx}.mp4"),
+        )
 
 
-def video_from_array(image_sequence_array, output_filename = "output_video.mp4"):
+def video_from_array(image_sequence_array, output_filename="output_video.mp4"):
     import cv2
+
     # Assuming `image_sequence` is your tensor with shape (time, height, width, 3)
     # Normalize the image values to [0, 255] if they are not already in this range
     image_sequence_array = (image_sequence_array * 255).clip(0, 255).astype(np.uint8)
@@ -234,8 +247,17 @@ def video_from_array(image_sequence_array, output_filename = "output_video.mp4")
 def decode_video_from_feature_sequence(env, rollout, output_filename):
     # feature_sequence_batch = torch.FloatTensor(d["learned_metrics"]["traj"]).to(env.device).squeeze(1)
     # layout: (batch, time, features)
-    feature_sequence_batch = torch.FloatTensor(rollout["traj"]).to(env.device).unsqueeze(0).squeeze(2)
-    image_sequence = env.car.wm.heads["decoder"](feature_sequence_batch)["image"].mode().squeeze(0).cpu().detach().numpy()
+    feature_sequence_batch = (
+        torch.FloatTensor(rollout["traj"]).to(env.device).unsqueeze(0).squeeze(2)
+    )
+    image_sequence = (
+        env.car.wm.heads["decoder"](feature_sequence_batch)["image"]
+        .mode()
+        .squeeze(0)
+        .cpu()
+        .detach()
+        .numpy()
+    )
     # convert tensor of (time, npx, npy, 3) to mp4 video
     video_from_array(image_sequence, output_filename)
 
@@ -276,14 +298,17 @@ def visualize_evaluated_rollout_stats(evaluated_rollouts, title):
 def evaluate(
     env,
     agent,
+    dreamer,
+    lx_classifier_mlp,
     ground_truth_brt,
     experiment_name,
     position_gridsize,
     angle_gridsize,
-    reproduce_value_function=True,
-    reproduce_closed_loop_rollouts=True,
-    reproduce_open_loop_rollouts=True,
-    generate_videos=True,
+    reproduce_value_function=False,
+    reproduce_closed_loop_rollouts=False,
+    reproduce_open_loop_rollouts=False,
+    reproduce_classifier_eval=False,
+    generate_videos=False,
     show_plots=True,
 ):
     output_folder = os.path.join(
@@ -329,7 +354,9 @@ def evaluate(
         evaluated_rollouts, title=f"{experiment_name} Closed-Loop Rollout Evaluation"
     )
     if generate_videos:
-        generate_representative_rollout_videos(env, evaluated_rollouts, output_folder, experiment_name)
+        generate_representative_rollout_videos(
+            env, evaluated_rollouts, output_folder, experiment_name
+        )
     if the_ipython_instance is not None and show_plots:
         IPython.display.display(plt)
 
@@ -360,9 +387,40 @@ def evaluate(
         title=f"{experiment_name} Open-Loop Rollout Evaluation",
     )
     if generate_videos:
-        generate_representative_rollout_videos(env, evaluated_open_loop_rollouts, output_folder, f"open_loop_{experiment_name}")
+        generate_representative_rollout_videos(
+            env,
+            evaluated_open_loop_rollouts,
+            output_folder,
+            f"open_loop_{experiment_name}",
+        )
     if the_ipython_instance is not None and show_plots:
         IPython.display.display(plt)
+
+    # --- create publication ready figures
+    # TODO: maybe move this code to another function or even separate notebook
+    # visualize failure classifier
+    for theta in [0, math.pi / 2]:
+        classifier_eval_path = os.path.join(
+            output_folder,
+            # file name to 2 digits
+            f"{experiment_name}_classifier_evaluation_theta{int(theta*180/math.pi):02d}deg",
+        )
+        if reproduce_classifier_eval or not os.path.exists(f"{classifier_eval_path}.pkl"):
+            print("reproduce_classifier_eval: ", reproduce_classifier_eval)
+            print("exists: ", os.path.exists(classifier_eval_path))
+            lx_classifier_mlp.eval()
+            classifier_evaluation = dreamer.evaluate_classifier(
+                lx_classifier_mlp, theta
+            )
+            save_obj(classifier_evaluation, classifier_eval_path)
+        classifier_evaluation = load_obj(classifier_eval_path)
+        plot_array, *_ = dreamer.plot_classifier_evaluation(
+            classifier_evaluation["v"],
+            classifier_evaluation["g_x"],
+            classifier_evaluation["labels"],
+        )
+        if the_ipython_instance is not None:
+            IPython.display.display(Image.fromarray(plot_array))
 
 
 # %% base setup
@@ -373,84 +431,96 @@ default_env, default_environment_info = RARL_wm.construct_environment(
     default_config, visualize_failure_sets=False
 )
 agent = load_best_agent(default_config, default_environment_info)
+dreamer = train_wm.set_up_dreamer_training(default_config)["agent"]
+
+lx_classifier_mlp, _ = default_env.car.wm._init_lx_mlp(default_config, 1)
+lx_ckpt = torch.load(default_config.lx_ckpt)
+lx_classifier_mlp.load_state_dict(lx_ckpt["agent_state_dict"])
 default_ground_truth_brt = np.load(default_config.grid_path)
 
 # %%
 experiment_setups = {}
-# -------------------------------------------------------appearance ood setups
 # in-distribution setup
 experiment_setups["nominal"] = {
     "env": default_env,
     "ground_truth_brt": default_ground_truth_brt,
 }
-
-# out-of-distribution evaluation with cyan background
-experiment_setups["cyanbg_ood"] = {
-    "env": RARL_wm.construct_environment(
-        default_config, visualize_failure_sets=False, ood_dict={"background": (0, 1, 1)}
-    )[0],
-    "ground_truth_brt": default_ground_truth_brt,
-}
-# out-of-distribution evaluation with magenta background
-experiment_setups["magentabg_ood"] = {
-    "env": RARL_wm.construct_environment(
-        default_config, visualize_failure_sets=False, ood_dict={"background": (1, 0, 1)}
-    )[0],
-    "ground_truth_brt": default_ground_truth_brt,
-}
-# out-of-distribution evaluation with different scale
-experiment_setups["scaled01_ood"] = {
-    "env": RARL_wm.construct_environment(
-        default_config, visualize_failure_sets=False, ood_dict={"scale": 0.1}
-    )[0],
-    "ground_truth_brt": default_ground_truth_brt,
-}
-# out-of-distribution evaluation with magenta obstacles
-experiment_setups["magentaobs_ood"] = {
-    "env": RARL_wm.construct_environment(
-        default_config, visualize_failure_sets=False, ood_dict={"obstacle_color": (1, 0, 1)}
-    )[0],
-    "ground_truth_brt": default_ground_truth_brt,
-}
-# out-of-distribution evaluation with yellow obstacles
-experiment_setups["yellowobs_ood"] = {
-    "env": RARL_wm.construct_environment(
-        default_config, visualize_failure_sets=False, ood_dict={"obstacle_color": (1, 1, 0)}
-    )[0],
-    "ground_truth_brt": default_ground_truth_brt,
-}
+# -------------------------------------------------------appearance ood setups
+run_app_ood_setups = False
+if run_app_ood_setups:
+    # out-of-distribution evaluation with cyan background
+    experiment_setups["cyanbg_ood"] = {
+        "env": RARL_wm.construct_environment(
+            default_config, visualize_failure_sets=False, ood_dict={"background": (0, 1, 1)}
+        )[0],
+        "ground_truth_brt": default_ground_truth_brt,
+    }
+    # out-of-distribution evaluation with magenta background
+    experiment_setups["magentabg_ood"] = {
+        "env": RARL_wm.construct_environment(
+            default_config, visualize_failure_sets=False, ood_dict={"background": (1, 0, 1)}
+        )[0],
+        "ground_truth_brt": default_ground_truth_brt,
+    }
+    # out-of-distribution evaluation with different scale
+    experiment_setups["scaled01_ood"] = {
+        "env": RARL_wm.construct_environment(
+            default_config, visualize_failure_sets=False, ood_dict={"scale": 0.1}
+        )[0],
+        "ground_truth_brt": default_ground_truth_brt,
+    }
+    # out-of-distribution evaluation with magenta obstacles
+    experiment_setups["magentaobs_ood"] = {
+        "env": RARL_wm.construct_environment(
+            default_config,
+            visualize_failure_sets=False,
+            ood_dict={"obstacle_color": (1, 0, 1)},
+        )[0],
+        "ground_truth_brt": default_ground_truth_brt,
+    }
+    # out-of-distribution evaluation with yellow obstacles
+    experiment_setups["yellowobs_ood"] = {
+        "env": RARL_wm.construct_environment(
+            default_config,
+            visualize_failure_sets=False,
+            ood_dict={"obstacle_color": (1, 1, 0)},
+        )[0],
+        "ground_truth_brt": default_ground_truth_brt,
+    }
 
 # ------------------------------------------------------- position ood setups
-# out-of-distriution with offset x position
-offsetx_ood_config = RARL_wm.get_config(parse_args=False, root_key="offsetx_ood")
-offsetx_ood_env, _ = RARL_wm.construct_environment(
-    offsetx_ood_config, visualize_failure_sets=False
-)
-offsetx_ood_brt = np.load(offsetx_ood_config.grid_path)
-experiment_setups["offsetx_ood"] = {
-    "env": offsetx_ood_env,
-    "ground_truth_brt": offsetx_ood_brt,
-}
+run_position_ood_setups = False
+if run_position_ood_setups:
+    # out-of-distriution with offset x position
+    offsetx_ood_config = RARL_wm.get_config(parse_args=False, root_key="offsetx_ood")
+    offsetx_ood_env, _ = RARL_wm.construct_environment(
+        offsetx_ood_config, visualize_failure_sets=False
+    )
+    offsetx_ood_brt = np.load(offsetx_ood_config.grid_path)
+    experiment_setups["offsetx_ood"] = {
+        "env": offsetx_ood_env,
+        "ground_truth_brt": offsetx_ood_brt,
+    }
 
-offsety_ood_config = RARL_wm.get_config(parse_args=False, root_key="offsety_ood")
-offsety_ood_env, _ = RARL_wm.construct_environment(
-    offsety_ood_config, visualize_failure_sets=False
-)
-offsety_ood_brt = np.load(offsety_ood_config.grid_path)
-experiment_setups["offsety_ood"] = {
-    "env": offsety_ood_env,
-    "ground_truth_brt": offsety_ood_brt,
-}
+    offsety_ood_config = RARL_wm.get_config(parse_args=False, root_key="offsety_ood")
+    offsety_ood_env, _ = RARL_wm.construct_environment(
+        offsety_ood_config, visualize_failure_sets=False
+    )
+    offsety_ood_brt = np.load(offsety_ood_config.grid_path)
+    experiment_setups["offsety_ood"] = {
+        "env": offsety_ood_env,
+        "ground_truth_brt": offsety_ood_brt,
+    }
 
-offsetr_ood_config = RARL_wm.get_config(parse_args=False, root_key="offsetr_ood")
-offsetr_ood_env, _ = RARL_wm.construct_environment(
-    offsetr_ood_config, visualize_failure_sets=False
-)
-offsetr_ood_brt = np.load(offsetr_ood_config.grid_path)
-experiment_setups["offsetr_ood"] = {
-    "env": offsetr_ood_env,
-    "ground_truth_brt": offsetr_ood_brt,
-}
+    offsetr_ood_config = RARL_wm.get_config(parse_args=False, root_key="offsetr_ood")
+    offsetr_ood_env, _ = RARL_wm.construct_environment(
+        offsetr_ood_config, visualize_failure_sets=False
+    )
+    offsetr_ood_brt = np.load(offsetr_ood_config.grid_path)
+    experiment_setups["offsetr_ood"] = {
+        "env": offsetr_ood_env,
+        "ground_truth_brt": offsetr_ood_brt,
+    }
 
 
 # %%
@@ -463,6 +533,8 @@ for experiment_name, experiment_setup in experiment_setups.items():
     evaluate(
         env=experiment_setup["env"],
         agent=agent,
+        dreamer=dreamer,
+        lx_classifier_mlp=lx_classifier_mlp,
         ground_truth_brt=experiment_setup["ground_truth_brt"],
         experiment_name=experiment_name,
         position_gridsize=position_gridsize,

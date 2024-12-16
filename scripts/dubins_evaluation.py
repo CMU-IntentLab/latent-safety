@@ -522,7 +522,6 @@ if run_position_ood_setups:
         "ground_truth_brt": offsetr_ood_brt,
     }
 
-
 # %%
 # run all of the experiment setups in sequence
 for experiment_name, experiment_setup in experiment_setups.items():

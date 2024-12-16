@@ -15,6 +15,8 @@ from io import BytesIO
 from PIL import Image
 import matplotlib.patches as patches
 import io
+from matplotlib.colors import LinearSegmentedColormap
+
 
 # os.environ["MUJOCO_GL"] = "osmesa"
 
@@ -532,66 +534,32 @@ class Dreamer(nn.Module):
 
     def plot_classifier_evaluation(self, v, g_x, labels):
         _, _, nz = v.shape
-        fig, axes = plt.subplots(nz, 2, figsize=(12, nz*6))
-        vmax = round(max(np.max(v), 0),1)
-        vmin = round(min(np.min(v), -vmax),1)
+        fig, axes = plt.subplots(nz, 2, figsize=(12, nz * 6))
+        vmax = round(max(np.max(v), 0), 1)
+        vmin = round(min(np.min(v), -vmax), 1)
         safe_idxs = np.where(np.array(labels) == 0)
         unsafe_idxs = np.where(np.array(labels) == 1)
-        tp  = np.where(g_x[safe_idxs] > 0)
-        fn  = np.where(g_x[safe_idxs] <= 0)
-        fp  = np.where(g_x[unsafe_idxs] > 0)
-        tn  = np.where(g_x[unsafe_idxs] <= 0)
-        
+        tp = np.where(g_x[safe_idxs] > 0)
+        fn = np.where(g_x[safe_idxs] <= 0)
+        fp = np.where(g_x[unsafe_idxs] > 0)
+        tn = np.where(g_x[unsafe_idxs] <= 0)
+
         for i in range(nz):
-            if nz > 1:
-                ax0 = axes[i, 0]
-            else:
-                ax0 = axes[0]
+            ax0 = axes[i, 0] if nz > 1 else axes[0]
+            plot_heatmap(fig, ax0, v[:, :, i], r'$g(x)$', vmin, vmax, theme="classifier", domain="continuous")
 
-            im = ax0.imshow(
-                v[:, :, i].T, interpolation='none', extent=np.array([
-                -1.1, 1.1, -1.1,1.1, ]), origin="lower",
-                cmap="seismic", vmin=vmin, vmax=vmax, zorder=-1
-            )
-            cbar = fig.colorbar(
-                im, ax=ax0, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
-            )
-            cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=24)
-            ax0.set_title(r'$g(x)$', fontsize=18)
+            ax1 = axes[i, 1] if nz > 1 else axes[1]
+            plot_heatmap(fig, ax1, v[:, :, i] > 0, r'$\mathcal{F}(x)$', -1, 1, theme="classifier", domain="binary")
 
-            if nz > 1:
-                ax1 = axes[i, 1]
-            else:
-                ax1 = axes[1]
-
-            im = ax1.imshow(
-                v[:, :, i].T > 0, interpolation='none', extent=np.array([
-                -1.1, 1.1, -1.1,1.1, ]), origin="lower",
-                cmap="seismic", vmin=-1, vmax=1, zorder=-1
-            )
-            cbar = fig.colorbar(
-                im, ax=ax1, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
-            )
-            cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=24)
-            ax1.set_title(r'$v(x)$', fontsize=18)
-            fig.tight_layout()
-            circle = plt.Circle((0, 0), 0.5, fill=False, color='blue', label = 'GT boundary')
-
-            # Add the circle to the plot
-            ax0.add_patch(circle)
-            ax0.set_aspect('equal')
-            circle2 = plt.Circle((0, 0), 0.5, fill=False, color='blue', label = 'GT boundary')
-
-            ax1.add_patch(circle2)
-            ax1.set_aspect('equal')
+        fig.tight_layout()
 
         fp_g = np.shape(fp)[1]
         fn_g = np.shape(fn)[1]
         tp_g = np.shape(tp)[1]
         tn_g = np.shape(tn)[1]
         tot = fp_g + fn_g + tp_g + tn_g
-        fig.suptitle(r"$TP={:.0f}\%$ ".format(tp_g/tot * 100) + r"$TN={:.0f}\%$ ".format(tn_g/tot * 100) + r"$FP={:.0f}\%$ ".format(fp_g/tot * 100) +r"$FN={:.0f}\%$".format(fn_g/tot * 100),
-            fontsize=10,)
+        fig.suptitle(r"$TP={:.0f}\%$ ".format(tp_g / tot * 100) + r"$TN={:.0f}\%$ ".format(tn_g / tot * 100) + r"$FP={:.0f}\%$ ".format(fp_g / tot * 100) + r"$FN={:.0f}\%$".format(fn_g / tot * 100),
+                    fontsize=10,)
         buf = BytesIO()
 
         plt.savefig(buf, format="png")
@@ -599,6 +567,7 @@ class Dreamer(nn.Module):
         buf.seek(0)
         plot = Image.open(buf).convert("RGB")
         return np.array(plot), tp, fn, fp, tn
+
     
     def get_eval_plot(self, obs_mlp, theta=None):
         eval_result = self.evaluate_classifier(obs_mlp, theta)
@@ -770,3 +739,43 @@ class Dreamer(nn.Module):
 
     def _reward_fn(self, feat, state, action):
         return self._wm.heads["reward"](self._wm.dynamics.get_feat(state)).mode()
+
+def plot_heatmap(fig, ax, data, title, vmin, vmax, theme, domain):
+    # cmap = plt.cm.seismic
+    if theme == "classifier":
+        colors = ["#444444", "white"]  # Mid-gray (#bfbfbf) to white
+    elif theme == "value_function":
+        colors = ["#000000", "#ffffff"]  # Black to white
+    else: 
+        raise NotImplementedError(theme)
+
+    if domain == "continuous":    
+        cmap = LinearSegmentedColormap.from_list("GrayToWhite", [colors[0], "white", colors[1]])
+    else:
+        cmap = LinearSegmentedColormap.from_list("GrayToWhite", colors)
+
+
+    im = ax.imshow(
+        data.T,
+        interpolation='none',
+        extent=np.array([-1.1, 1.1, -1.1, 1.1]),
+        origin="lower",
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
+        zorder=-1
+    )
+    ax.set_xticks([-1, 0, 1])
+    ax.set_yticks([-1, 0, 1])
+
+    if domain == "continuous":
+        cbar = fig.colorbar(
+            im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
+        )
+        cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=24)
+    ax.set_title(title, fontsize=15)
+    circle = plt.Circle((0, 0), 0.5, fill=False, color='black', label='GT boundary', linewidth=2)
+
+
+    ax.add_patch(circle)
+    ax.set_aspect('equal')

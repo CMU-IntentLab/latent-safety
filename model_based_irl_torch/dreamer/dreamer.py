@@ -19,6 +19,7 @@ from matplotlib.colors import LinearSegmentedColormap
 
 
 # os.environ["MUJOCO_GL"] = "osmesa"
+DEFAULT_FONTSIZE = 15
 
 
 class Dreamer(nn.Module):
@@ -559,7 +560,7 @@ class Dreamer(nn.Module):
         tn_g = np.shape(tn)[1]
         tot = fp_g + fn_g + tp_g + tn_g
         fig.suptitle(r"$TP={:.0f}\%$ ".format(tp_g / tot * 100) + r"$TN={:.0f}\%$ ".format(tn_g / tot * 100) + r"$FP={:.0f}\%$ ".format(fp_g / tot * 100) + r"$FN={:.0f}\%$".format(fn_g / tot * 100),
-                    fontsize=10,)
+                    fontsize=DEFAULT_FONTSIZE,)
         buf = BytesIO()
 
         plt.savefig(buf, format="png")
@@ -767,13 +768,14 @@ def plot_heatmap(fig, ax, data, title, vmin, vmax, theme, domain):
     )
     ax.set_xticks([-1, 0, 1])
     ax.set_yticks([-1, 0, 1])
+    ax.tick_params(axis='both', which='major', labelsize=DEFAULT_FONTSIZE)
 
     if domain == "continuous":
         cbar = fig.colorbar(
-            im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
+            im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax],
         )
-        cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=24)
-    ax.set_title(title, fontsize=15)
+        cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=DEFAULT_FONTSIZE)
+    ax.set_title(title, fontsize=DEFAULT_FONTSIZE)
     circle = plt.Circle((0, 0), 0.5, fill=False, color='black', label='GT boundary', linewidth=2)
 
 

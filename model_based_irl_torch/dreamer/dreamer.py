@@ -5,6 +5,7 @@ import pathlib
 import torch
 
 from torch import nn
+import dreamer
 import dreamer.exploration as expl
 import dreamer.models as models
 import dreamer.tools as tools
@@ -15,12 +16,8 @@ from io import BytesIO
 from PIL import Image
 import matplotlib.patches as patches
 import io
-from matplotlib.colors import LinearSegmentedColormap
-
 
 # os.environ["MUJOCO_GL"] = "osmesa"
-DEFAULT_FONTSIZE = 15
-
 
 class Dreamer(nn.Module):
     def __init__(
@@ -547,10 +544,10 @@ class Dreamer(nn.Module):
 
         for i in range(nz):
             ax0 = axes[i, 0] if nz > 1 else axes[0]
-            plot_heatmap(fig, ax0, v[:, :, i], r'$g(x)$', vmin, vmax, theme="classifier", domain="continuous")
+            tools.plot_heatmap(fig, ax0, v[:, :, i], r'$g(x)$', vmin, vmax, theme="classifier", domain="continuous")
 
             ax1 = axes[i, 1] if nz > 1 else axes[1]
-            plot_heatmap(fig, ax1, v[:, :, i] > 0, r'$\mathcal{F}(x)$', -1, 1, theme="classifier", domain="binary")
+            tools.plot_heatmap(fig, ax1, v[:, :, i], r'$\mathcal{F}(x)$', -1, 1, theme="classifier", domain="binary")
 
         fig.tight_layout()
 
@@ -560,7 +557,7 @@ class Dreamer(nn.Module):
         tn_g = np.shape(tn)[1]
         tot = fp_g + fn_g + tp_g + tn_g
         fig.suptitle(r"$TP={:.0f}\%$ ".format(tp_g / tot * 100) + r"$TN={:.0f}\%$ ".format(tn_g / tot * 100) + r"$FP={:.0f}\%$ ".format(fp_g / tot * 100) + r"$FN={:.0f}\%$".format(fn_g / tot * 100),
-                    fontsize=DEFAULT_FONTSIZE,)
+                    fontsize=tools.DEFAULT_FONTSIZE,)
         buf = BytesIO()
 
         plt.savefig(buf, format="png")
@@ -740,44 +737,3 @@ class Dreamer(nn.Module):
 
     def _reward_fn(self, feat, state, action):
         return self._wm.heads["reward"](self._wm.dynamics.get_feat(state)).mode()
-
-def plot_heatmap(fig, ax, data, title, vmin, vmax, theme, domain):
-    # cmap = plt.cm.seismic
-    if theme == "classifier":
-        colors = ["#444444", "white"]  # Mid-gray (#bfbfbf) to white
-    elif theme == "value_function":
-        colors = ["#000000", "#ffffff"]  # Black to white
-    else: 
-        raise NotImplementedError(theme)
-
-    if domain == "continuous":    
-        cmap = LinearSegmentedColormap.from_list("GrayToWhite", [colors[0], "white", colors[1]])
-    else:
-        cmap = LinearSegmentedColormap.from_list("GrayToWhite", colors)
-
-
-    im = ax.imshow(
-        data.T,
-        interpolation='none',
-        extent=np.array([-1.1, 1.1, -1.1, 1.1]),
-        origin="lower",
-        cmap=cmap,
-        vmin=vmin,
-        vmax=vmax,
-        zorder=-1
-    )
-    ax.set_xticks([-1, 0, 1])
-    ax.set_yticks([-1, 0, 1])
-    ax.tick_params(axis='both', which='major', labelsize=DEFAULT_FONTSIZE)
-
-    if domain == "continuous":
-        cbar = fig.colorbar(
-            im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax],
-        )
-        cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=DEFAULT_FONTSIZE)
-    ax.set_title(title, fontsize=DEFAULT_FONTSIZE)
-    circle = plt.Circle((0, 0), 0.5, fill=False, color='black', label='GT boundary', linewidth=2)
-
-
-    ax.add_patch(circle)
-    ax.set_aspect('equal')

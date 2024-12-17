@@ -1077,7 +1077,7 @@ class DubinsCarOneEnvImg(gym.Env):
     X = np.linspace(self.bounds[0,0], self.bounds[0,1], nx)
     Y = np.linspace(self.bounds[1,0], self.bounds[1,1], ny)
     X, Y = np.meshgrid(X, Y)
-    ax.contour(X, Y, v.T, levels=[0], colors='white', linewidths=2, zorder=1)
+    ax.contour(X, Y, v.T, levels=[0], colors='white', linewidths=2)
     return v
 
   def plot_v_values(

@@ -1,6 +1,7 @@
 # %% preamble
 # making sure we use GPU1
 import os
+import matplotlib.pyplot as plt
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
@@ -35,17 +36,19 @@ def load_best_agent(config, environment_info):
     return agent
 
 
-def compute_value_funtion_metrics(env, ground_truth_brt, q_func):
+def evaluate_value_function(env, ground_truth_brt, q_func):
     nx = ground_truth_brt.shape[0]
     ny = ground_truth_brt.shape[1]
     # sub-sample theta indices to reduce computation
     theta_indices = np.linspace(0, ground_truth_brt.shape[2] - 1, 3, dtype=int)
+    thetas = []
     slices = []
     for theta_idx in theta_indices:
         # map index back to angle
         theta = theta_idx * 2 * np.pi / ground_truth_brt.shape[2]
         slice = env.get_value(q_func, theta=theta, nx=nx, ny=ny)
         slices.append(slice)
+        thetas.append(theta)
     v_nn = np.stack(slices, axis=2)
     v_grid = ground_truth_brt[:, :, theta_indices]
     tn, tp, fn, fp = env.confusion(v_nn, v_grid)
@@ -63,7 +66,10 @@ def compute_value_funtion_metrics(env, ground_truth_brt, q_func):
     else:
         f1 = 2 * precision * recall / (precision + recall)
 
-    metrics = {
+    evaluation = {
+        "thetas": thetas,
+        "v_grid": v_grid,
+        "v_nn": v_nn,
         "tn": tn,
         "tp": tp,
         "fn": fn,
@@ -74,7 +80,32 @@ def compute_value_funtion_metrics(env, ground_truth_brt, q_func):
         "f1": f1,
     }
 
-    return metrics
+    return evaluation
+
+def visualize_value_function_evaluation(value_function_evaluation):
+    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+
+    slice_index = 0
+    theta = value_function_evaluation["thetas"][slice_index]
+
+    ground_truth_data = value_function_evaluation["v_grid"][:, :, slice_index]
+    vmin = np.min(ground_truth_data)
+    vmax = np.max(ground_truth_data)
+
+    
+    train_wm.tools.plot_heatmap(
+        fig = fig,
+        ax = axes[0],
+        data = ground_truth_data,
+        title = f"Ground Truth Value Function (theta = {theta:.2f})",
+        vmin = vmin,
+        vmax = vmax,
+        theme = "value_function",
+        domain = "binary"
+    )
+
+    return fig
+
 
 
 def get_grid_value_for_state(env, grid, x, y, theta):
@@ -317,20 +348,24 @@ def evaluate(
     os.makedirs(output_folder, exist_ok=True)
 
     # ------------------------------------------- value function
-    value_function_metrics_path = os.path.join(
-        output_folder, experiment_name + "_value_function_metrics"
+    value_function_evaluation_path = os.path.join(
+        output_folder, experiment_name + "_value_function_evaluation"
     )
     if reproduce_value_function or not os.path.exists(
-        f"{value_function_metrics_path}.pkl"
+        f"{value_function_evaluation_path}.pkl"
     ):
-        value_function_metrics = compute_value_funtion_metrics(
+        value_function_evaluation = evaluate_value_function(
             env, ground_truth_brt, agent.Q_network
         )
-        save_obj(value_function_metrics, value_function_metrics_path)
-    value_function_metrics = load_obj(value_function_metrics_path)
+        save_obj(value_function_evaluation, value_function_evaluation_path)
+    value_function_evaluation = load_obj(value_function_evaluation_path)
+    figure = visualize_value_function_evaluation(value_function_evaluation)
+    if the_ipython_instance is not None and show_plots:
+        IPython.display.display(figure)
+
     # pretty print the metrics
-    for key, value in value_function_metrics.items():
-        print(f"{key}: {value:.3f}")
+    # for key, value in value_function_metrics.items():
+    #     print(f"{key}: {value:.3f}")
 
     # ----------------------- closed-loop rollout data collection
     closed_loop_rollout_data_path = os.path.join(

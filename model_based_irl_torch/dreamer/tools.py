@@ -6,6 +6,8 @@ import pathlib
 import random
 import time
 import cv2
+import matplotlib.pyplot as plt
+from matplotlib.colors import TwoSlopeNorm, BoundaryNorm
 from tqdm import trange
 from collections import defaultdict
 from typing import Any, Callable, Union
@@ -24,13 +26,15 @@ from common.utils import get_dataset_path_and_meta_info
 import dreamer.networks as networks
 import pickle
 import wandb
+from matplotlib.colors import LinearSegmentedColormap, ListedColormap
+
+DEFAULT_FONTSIZE = 15
+
 def to_np(x):
     return x.detach().cpu().numpy()
 
-
 def symlog(x):
     return torch.sign(x) * torch.log(torch.abs(x) + 1.0)
-
 
 def symexp(x):
     return torch.sign(x) * (torch.exp(torch.abs(x)) - 1.0)
@@ -1741,3 +1745,50 @@ def create_single_or_ensemble(ensemble_size, ensemble_subsample, name, base_kwar
     else:
         model = networks.MLP(**base_kwargs)
     return model
+
+def plot_heatmap(fig, ax, data, title, vmin, vmax, theme, domain):
+    if theme == "classifier":
+        colors = ["#666666", "white"]  # Mid-gray (#bfbfbf) to white
+    elif theme == "value_function":
+        colors = ["#ec3a2d", "white"]  # Red to white
+    else: 
+        raise NotImplementedError(theme)
+
+    image = data.T.copy()
+    if domain == "continuous":    
+        cmap = LinearSegmentedColormap.from_list("GrayToWhite", [colors[0], "white", colors[1]])
+    elif domain == "binary":
+        cmap = ListedColormap(colors)
+        # to make things discrete, convert all values above 0 to vmax and all values below 0 to vmin
+        image[image > 0] = vmax
+        image[image < 0] = vmin
+    else:
+        raise NotImplementedError(domain)
+
+    # making sure divergent color scale is such that white is at zero
+    norm = TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
+
+    im = ax.contourf(
+        data.T,
+        extent=np.array([-1.1, 1.1, -1.1, 1.1]),
+        cmap=cmap,
+        norm=norm,
+    )
+    ax.contour(
+        data.T, levels=[0], colors='black', linewidths=2,
+        extent = np.array([-1.1, 1.1, -1.1, 1.1])
+    )
+
+    ax.set_xticks([-1, 0, 1])
+    ax.set_yticks([-1, 0, 1])
+    ax.tick_params(axis='both', which='major', labelsize=DEFAULT_FONTSIZE)
+
+    if domain == "continuous":
+        cbar = fig.colorbar(
+            im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax],
+        )
+        cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=DEFAULT_FONTSIZE)
+    ax.set_title(title, fontsize=DEFAULT_FONTSIZE)
+    # circle = plt.Circle((0, 0), 0.5, fill=False, color='black', label='GT boundary', linewidth=2)
+    # ax.add_patch(circle)
+    ax.set_aspect('equal')

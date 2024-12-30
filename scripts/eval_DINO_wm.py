@@ -73,8 +73,7 @@ from torch import nn
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 from train_DINO_decoder import Decoder
-from train_DINO_wm import ViT
-from train_DINO_wm_claude import VideoTransformer
+from train_DINO_wm import VideoTransformer
 # helpers
 
 

@@ -76,8 +76,7 @@ from torch import nn
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 from train_DINO_decoder import Decoder
-from train_DINO_wm import ViT
-from train_DINO_wm_claude import VideoTransformer
+from train_DINO_wm import VideoTransformer
 
 
 # helpers
@@ -433,7 +432,7 @@ if __name__ == "__main__":
 
     expert_loader_imagine = iter(DataLoader(expert_data_imagine, batch_size=1, shuffle=True))
 
-    
+    threshold = 0.63
 
     decoder = Decoder().to(device)
     decoder.load_state_dict(torch.load('checkpoints/best_decoder_10m.pth'))
@@ -462,7 +461,7 @@ if __name__ == "__main__":
     while True:
         print('loop')
         data = next(expert_loader_imagine)
-        print(data["failure"][[0]])
+        print(data["failure"][[0], 2:])
 
         print((data["failure"][[0]]==0).all())
 
@@ -502,7 +501,7 @@ if __name__ == "__main__":
             inputs2 = torch.cat([inputs2[[0], 1:], pred2[:, -1].unsqueeze(1)], dim=1)
             states = torch.cat([states[[0], 1:], pred_state[:,-1].unsqueeze(1)], dim=1)
 
-        pred_failures = (torch.tensor(pred_failures) < 0).to(torch.int32)
+        pred_failures = (torch.tensor(pred_failures) < 0.5).to(torch.int32)
 
         
         gt_im1 = (data['agentview_image'][[0], :bl].squeeze().to(device)/255.).detach().cpu().numpy()
@@ -511,31 +510,35 @@ if __name__ == "__main__":
 
         gt_imgs = np.concatenate([gt_im1, gt_im2], axis=-1)
         pred_imgs = np.concatenate([im1s, im2s], axis=-1)
+        pred_imgs2 = np.concatenate([im1s, im2s], axis=-1)
 
 
         for i in range(len(pred_failures)):
+            if pred_brts[i] < threshold:
+                pred_imgs2[H+i, 1] *= 1.2
             if pred_failures[i] == 1:
                 pred_imgs[H+i, 0] *= 1.2
-            if all_fails[0,H+i] == 1:
+            if all_fails[0,H+i] == 1 or all_fails[0,H+i] == 2:
                 gt_imgs[H+i, 0] *= 1.2
+
             if pred_failures[i] == 0 and all_fails[0,H+i] == 0:
                 tn_ol+= 1
-            if pred_failures[i] == 0 and all_fails[0,H+i] == 1:
+            if pred_failures[i] == 0 and all_fails[0,H+i] != 0:
                 fp_ol+= 1
             if pred_failures[i] == 1 and all_fails[0,H+i] == 0:
                 fn_ol+= 1
-            if pred_failures[i] == 1 and all_fails[0,H+i] == 1:
+            if pred_failures[i] == 1 and all_fails[0,H+i] != 0:
                 tp_ol+= 1
             
         print('open loop: tn, fp fn tp', tn_ol, fp_ol, fn_ol, tp_ol)
-        print('doomed f', (torch.tensor(pred_brts)<0).to(torch.int32))
+        print('doomed f', (torch.tensor(pred_brts)<threshold).to(torch.int32))
         print('failures', pred_failures)
-        vid = np.concatenate([gt_imgs, pred_imgs], axis=-2)
+        vid = np.concatenate([gt_imgs, pred_imgs2, pred_imgs], axis=-2)
 
         vid = (vid * 255).clip(0, 255).astype(np.uint8)
         frames = np.transpose(vid, (0, 2, 3, 1))
         fps = 20  # Frames per second
-        iio.imwrite('output_video_dino_ol.gif', frames, duration=1/fps, loop=0)
+        #iio.imwrite('output_video_dino_ol.gif', frames, duration=1/fps, loop=0)
 
         # Release the video writer
         print('saved!')
@@ -577,40 +580,41 @@ if __name__ == "__main__":
         gt_im1 = (data['agentview_image'][[0], :bl].squeeze().to(device)/255.).detach().cpu().numpy()
         gt_im2 = (data['robot0_eye_in_hand_image'][[0], :bl].squeeze().to(device)/255.).detach().cpu().numpy()
             
-        pred_failures = (torch.tensor(pred_failures) < 0).to(torch.int32)
+        pred_failures_int = (torch.tensor(pred_failures) < 0.5).to(torch.int32)
               
         gt_imgs = np.concatenate([gt_im1, gt_im2], axis=-1)
         pred_imgs = np.concatenate([im1s, im2s], axis=-1)
-        
+        pred_imgs2 = np.concatenate([im1s, im2s], axis=-1)
         for i in range(len(pred_failures)):
-            if pred_failures[i] == 1:
+            if pred_brts[i] < threshold:
+                pred_imgs2[H+i, 1] *= 1.2
+            if pred_failures_int[i] == 1:
                 pred_imgs[H+i, 0] *= 1.2
-            if all_fails[0,H+i] == 1:
+            if all_fails[0,H+i] == 1 or all_fails[0,H+i] == 2:
                 gt_imgs[H+i, 0] *= 1.2
-            if pred_failures[i] == 0 and all_fails[0,H+i] == 0:
-                tn_cl+= 1
-            if pred_failures[i] == 0 and all_fails[0,H+i] == 1:
-                fp_cl+= 1
-            if pred_failures[i] == 1 and all_fails[0,H+i] == 0:
-                fn_cl+= 1
-            if pred_failures[i] == 1 and all_fails[0,H+i] == 1:
-                tp_cl+= 1    
 
-        print('open loop: tn, fp fn tp', tn_ol, fp_ol, fn_ol, tp_ol)
-        print('doomed f', (torch.tensor(pred_brts)))
+            if pred_failures_int[i] == 0 and all_fails[0,H+i] == 0:
+                tn_cl += 1
+            if pred_failures_int[i] == 0 and all_fails[0,H+i] != 0:
+                fp_cl += 1
+            if pred_failures_int[i] == 1 and all_fails[0,H+i] == 0:
+                fn_cl += 1
+            if pred_failures_int[i] == 1 and all_fails[0,H+i] != 0:
+                tp_cl += 1   
+        
 
-        print('doomed f', (torch.tensor(pred_brts)<0.5).to(torch.int32))
-        print('failures', pred_failures)
+        print('doomed f', (torch.tensor(pred_brts)<threshold).to(torch.int32))
+        print('failures', pred_failures_int)
+
         print('closed loop: tn, fp fn tp', tn_cl, fp_cl, fn_cl, tp_cl)  
-        vid = np.concatenate([gt_imgs, pred_imgs], axis=-2)
+        vid = np.concatenate([gt_imgs, pred_imgs2, pred_imgs], axis=-2)
 
         vid = (vid * 255).clip(0, 255).astype(np.uint8)
         frames = np.transpose(vid, (0, 2, 3, 1))
         fps = 20  # Frames per second
         print(im1s.shape)
-        iio.imwrite('output_video_dino_cl.gif', frames, duration=1/fps, loop=0)
+        #iio.imwrite('output_video_dino_cl.gif', frames, duration=1/fps, loop=0)
         print('end loop')
-        exit()
 
     
     

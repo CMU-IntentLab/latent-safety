@@ -1,0 +1,27 @@
+Metadata-Version: 2.1
+Name: LCRL
+Version: 0.0.1
+Summary: A Library for Learning Reachability Sets, based on Tianshou (version 0.5.1)
+Home-page: https://github.com/jamesjingqili/Lipschitz_Continuous_Reachability_Learning
+Author: james.jingqi.li
+Author-email: james.jingqi.li@gmail.com
+License: MIT
+Keywords: reinforcement learning platform pytorch
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.6
+Provides-Extra: dev
+Provides-Extra: atari
+Provides-Extra: mujoco
+Provides-Extra: pybullet
+License-File: LICENSE

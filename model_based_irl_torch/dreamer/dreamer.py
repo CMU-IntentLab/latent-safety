@@ -542,12 +542,23 @@ class Dreamer(nn.Module):
         fp = np.where(g_x[unsafe_idxs] > 0)
         tn = np.where(g_x[unsafe_idxs] <= 0)
 
+        x = np.linspace(-1.1, 1.1, 100)
+        y = np.linspace(-1.1, 1.1, 100)
+        X, Y = np.meshgrid(x, y)
+        ground_truth_classifier = (X**2 + Y**2) - 0.5**2
+
         for i in range(nz):
             ax0 = axes[i, 0] if nz > 1 else axes[0]
-            tools.plot_heatmap(fig, ax0, v[:, :, i], r'$g(x)$', vmin, vmax, theme="classifier", domain="continuous")
+            tools.plot_heatmap(
+                fig, ax0, v[:, :, i], r'$g(x)$', vmin, vmax, theme="classifier", domain="continuous",
+                boundary_data=ground_truth_classifier
+            )
 
             ax1 = axes[i, 1] if nz > 1 else axes[1]
-            tools.plot_heatmap(fig, ax1, v[:, :, i], r'$\mathcal{F}(x)$', -1, 1, theme="classifier", domain="binary")
+            tools.plot_heatmap(
+                fig, ax1, v[:, :, i], r'$\mathcal{F}(x)$', -1, 1, theme="classifier",
+                domain="binary", boundary_data=ground_truth_classifier
+            )
 
         fig.tight_layout()
 

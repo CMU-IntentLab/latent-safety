@@ -1746,7 +1746,7 @@ def create_single_or_ensemble(ensemble_size, ensemble_subsample, name, base_kwar
         model = networks.MLP(**base_kwargs)
     return model
 
-def plot_heatmap(fig, ax, data, title, vmin, vmax, theme, domain):
+def plot_heatmap(fig, ax, data, title, vmin, vmax, theme, domain, boundary_data = None):
     if theme == "classifier":
         colors = ["#666666", "white"]  # Mid-gray (#bfbfbf) to white
     elif theme == "value_function":
@@ -1774,8 +1774,9 @@ def plot_heatmap(fig, ax, data, title, vmin, vmax, theme, domain):
         cmap=cmap,
         norm=norm,
     )
+
     ax.contour(
-        data.T, levels=[0], colors='black', linewidths=2,
+        boundary_data.T, levels=[0], colors='black', linewidths=2,
         extent = np.array([-1.1, 1.1, -1.1, 1.1])
     )
 
@@ -1789,6 +1790,4 @@ def plot_heatmap(fig, ax, data, title, vmin, vmax, theme, domain):
         )
         cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=DEFAULT_FONTSIZE)
     ax.set_title(title, fontsize=DEFAULT_FONTSIZE)
-    # circle = plt.Circle((0, 0), 0.5, fill=False, color='black', label='GT boundary', linewidth=2)
-    # ax.add_patch(circle)
     ax.set_aspect('equal')

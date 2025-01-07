@@ -40,15 +40,10 @@ def evaluate_value_function(env, ground_truth_brt, q_func):
     nx = ground_truth_brt.shape[0]
     ny = ground_truth_brt.shape[1]
     # sub-sample theta indices to reduce computation
-    theta_indices = np.linspace(0, ground_truth_brt.shape[2] - 1, 3, dtype=int)
-    thetas = []
-    slices = []
-    for theta_idx in theta_indices:
-        # map index back to angle
-        theta = theta_idx * 2 * np.pi / ground_truth_brt.shape[2]
-        slice = env.get_value(q_func, theta=theta, nx=nx, ny=ny)
-        slices.append(slice)
-        thetas.append(theta)
+    # theta_indices = np.linspace(0, ground_truth_brt.shape[2], 3, dtype=int, endpoint=False)
+    thetas = np.array([0.0, math.pi / 2])
+    theta_indices = np.array([int(theta * (ground_truth_brt.shape[2] - 1) / (2 * math.pi)) for theta in thetas])
+    slices = [env.get_value(q_func, theta=theta, nx=nx, ny=ny) for theta in thetas]
     v_nn = np.stack(slices, axis=2)
     v_grid = ground_truth_brt[:, :, theta_indices]
     tn, tp, fn, fp = env.confusion(v_nn, v_grid)
@@ -83,26 +78,30 @@ def evaluate_value_function(env, ground_truth_brt, q_func):
     return evaluation
 
 def visualize_value_function_evaluation(value_function_evaluation):
-    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+    fig, axes = plt.subplots(1, len(value_function_evaluation["thetas"]), figsize=(12, 6))
 
-    slice_index = 0
-    theta = value_function_evaluation["thetas"][slice_index]
+    # slice_index = 0
+    for slice_index in range(len(value_function_evaluation["thetas"])):
+        ax = axes[slice_index]
+        theta_deg = math.degrees(value_function_evaluation["thetas"][slice_index])
 
-    ground_truth_data = value_function_evaluation["v_grid"][:, :, slice_index]
-    vmin = np.min(ground_truth_data)
-    vmax = np.max(ground_truth_data)
+        ground_truth_data = value_function_evaluation["v_grid"][:, :, slice_index]
+        nn_data = value_function_evaluation["v_nn"][:, :, slice_index]
+        vmin = np.min(ground_truth_data)
+        vmax = np.max(ground_truth_data)
 
-    
-    train_wm.tools.plot_heatmap(
-        fig = fig,
-        ax = axes[0],
-        data = ground_truth_data,
-        title = f"Ground Truth Value Function (theta = {theta:.2f})",
-        vmin = vmin,
-        vmax = vmax,
-        theme = "value_function",
-        domain = "binary"
-    )
+
+        train_wm.tools.plot_heatmap(
+            fig = fig,
+            ax = ax,
+            data = nn_data,
+            title = f"latent BRT\n(theta = {theta_deg:.0f}\u00b0)",
+            vmin = vmin,
+            vmax = vmax,
+            theme = "value_function",
+            domain = "binary",
+            boundary_data = ground_truth_data,
+        )
 
     return fig
 

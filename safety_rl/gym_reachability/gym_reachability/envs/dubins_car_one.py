@@ -531,23 +531,44 @@ class DubinsCarOneEnv(gym.Env):
           sample_inside_tar=sample_inside_tar,
           theta=theta,
       )
-    traj = []
+
+    groundtruth_metrics = {
+      "traj": [],
+      "valueList": [],
+      "gxList": [],
+      "minV": float('inf'),
+      "actionValueList": [],
+    }
+
+    learned_metrics = {
+      "traj": [],
+      "valueList": [],
+      "gxList": [],
+      "minV": float('inf'),
+      "actionValueList": [],
+    }
+
+    def _update_metrics(metrics, state, g_x, action_value=None):
+      metrics["traj"].append(state)
+      metrics["gxList"].append(g_x)
+      metrics["minV"] = min(metrics["minV"], g_x)
+      metrics["valueList"].append(metrics["minV"])
+      if action_value is not None:
+        metrics["actionValueList"].append(action_value)
+
     result = 0  # not finished
-    valueList = []
-    gxList = []
-    lxList = []
+
     for t in range(T):
-      traj.append(state)
-
       g_x = self.safety_margin(state)
-      # = Rollout Record
-      if t == 0:
-        minV = g_x #current
-      else:
-        minV = min(g_x, minV)
+      _update_metrics(groundtruth_metrics, state, g_x)
 
-      valueList.append(minV)
-      gxList.append(g_x)
+      q_func.eval()
+      state_tensor = torch.FloatTensor(state).to(self.device).unsqueeze(0)
+      action_index = q_func(state_tensor).max(dim=1)[1].item()
+      action_value = q_func(state_tensor).max(dim=1)[0].item()
+      u = self.car.discrete_controls[action_index]
+
+      _update_metrics(learned_metrics, state, g_x, action_value)
 
       if toEnd:
         done = not self.car.check_within_bounds(state)
@@ -556,17 +577,23 @@ class DubinsCarOneEnv(gym.Env):
           break
       else:
         if g_x < 0:
-          result = -1 # failed
+          result = -1  # failed
           break
 
-      q_func.eval()
-      state_tensor = (torch.FloatTensor(state).to(self.device).unsqueeze(0))
-      action_index = q_func(state_tensor).max(dim=1)[1].item()
-      u = self.car.discrete_controls[action_index]
-
       state = self.car.integrate_forward(state, u)
-    traj = np.array(traj)
-    info = {"valueList": valueList, "gxList": gxList, "lxList": lxList}
+
+    # construting outputs to match the previous version of the code for backward compatibility
+    traj = np.array(groundtruth_metrics["traj"])
+    minV = groundtruth_metrics["minV"]
+    valueList = groundtruth_metrics["valueList"]
+    gxList = groundtruth_metrics["gxList"]
+
+    info = {
+      "valueList": valueList,
+      "gxList": gxList,
+      "groundtruth_metrics": groundtruth_metrics,
+      "learned_metrics": learned_metrics,
+    }
     return traj, result, minV, info
 
   def simulate_trajectories(
@@ -610,7 +637,7 @@ class DubinsCarOneEnv(gym.Env):
       ys = np.linspace(self.bounds[1, 0], self.bounds[1, 1], ny)
       results = np.empty((nx, ny), dtype=int)
       minVs = np.empty((nx, ny), dtype=float)
-      infos = {} #np.empty((nx, ny), dtype=object)
+      infos = {}
 
       it = np.nditer(results, flags=["multi_index"])
       print()
@@ -636,7 +663,7 @@ class DubinsCarOneEnv(gym.Env):
     else:
       results = np.empty(shape=(len(states),), dtype=int)
       minVs = np.empty(shape=(len(states),), dtype=float)
-      infos = np.empty(shape=(len(states),), dtype=object)
+      infos = {}
       for idx, state in enumerate(states):
         traj, result, minV, info = self.simulate_one_trajectory(
             q_func, T=T, state=state, toEnd=toEnd,

@@ -175,7 +175,6 @@ def evaluate_rollout_data(env, rollout_data, ground_truth_brt):
 
     for theta_data in rollout_data.values():
         for rollout_info in theta_data.values():
-            print("rollout info type: ", type(rollout_info))
             # extract relevant information from the rollout
             # ground truth metrics
             ground_truth_metrics = rollout_info["groundtruth_metrics"]

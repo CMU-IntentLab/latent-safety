@@ -17,6 +17,8 @@ parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(parent_dir)
 saferl_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../safety_rl'))
 sys.path.append(saferl_dir)
+dreamer_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../model_based_irl_torch'))
+sys.path.append(dreamer_dir)
 print(sys.path)
 import argparse
 import time
@@ -37,454 +39,478 @@ matplotlib.use('Agg')
 simplefilter(action='ignore', category=FutureWarning)
 timestr = time.strftime("%Y-%m-%d-%H_%M")
 
-# == ARGS ==
-parser = argparse.ArgumentParser()
+def visualize_env_failure_sets(env, args, figureFolder):
+    if args.plotFigure or args.storeFigure:
+        nx, ny = 101, 101
+        vmin = -1
+        vmax = 1
 
-# environment parameters
-parser.add_argument(
-    "-dt", "--doneType", help="when to raise done flag", default='toEnd',
-    type=str
-)
-parser.add_argument(
-    "-ct", "--costType", help="cost type", default='sparse', type=str
-)
-parser.add_argument(
-    "-rnd", "--randomSeed", help="random seed", default=0, type=int
-)
+        v = np.zeros((nx, ny))
+        g_x = np.zeros((nx, ny))
+        xs = np.linspace(env.bounds[0, 0], env.bounds[0, 1], nx)
+        ys = np.linspace(env.bounds[1, 0], env.bounds[1, 1], ny)
 
-# car dynamics
-parser.add_argument(
-    "-cr", "--consRadius", help="constraint radius", default=0.5, type=float
-)
-parser.add_argument(
-    "-tr", "--targetRadius", help="target radius", default=.5, type=float
-)
-parser.add_argument(
-    "-turn", "--turnRadius", help="turning radius", default=1/1.25, type=float
-)
-parser.add_argument("-s", "--speed", help="speed", default=1., type=float)
+        it = np.nditer(v, flags=['multi_index'])
 
-# training scheme
-parser.add_argument(
-    "-w", "--warmup", help="warmup Q-network", action="store_true"
-)
-parser.add_argument(
-    "-wi", "--warmupIter", help="warmup iteration", default=10000, type=int
-)
-parser.add_argument(
-    "-mu", "--maxUpdates", help="maximal #gradient updates", default=400000,
-    type=int
-)
-parser.add_argument(
-    "-ut", "--updateTimes", help="#hyper-param. steps", default=20, type=int
-)
-parser.add_argument(
-    "-mc", "--memoryCapacity", help="memoryCapacity", default=10000, type=int
-)
-parser.add_argument(
-    "-cp", "--checkPeriod", help="check period", default=20000, type=int
-)
+        while not it.finished:
+            idx = it.multi_index
+            x = xs[idx[0]]
+            y = ys[idx[1]]
 
-# hyper-parameters
-parser.add_argument(
-    "-a", "--annealing", help="gamma annealing", action="store_true"
-)
-parser.add_argument(
-    "-arc", "--architecture", help="NN architecture", default=[100, 100],
-    nargs="*", type=int
-)
-parser.add_argument(
-    "-lr", "--learningRate", help="learning rate", default=1e-3, type=float
-)
-parser.add_argument(
-    "-g", "--gamma", help="contraction coeff.", default=0.9999, type=float
-)
-parser.add_argument(
-    "-act", "--actType", help="activation type", default='Tanh', type=str
-)
+            g_x[idx] = env.safety_margin(np.array([x, y]))
 
-# RL type
-parser.add_argument("-m", "--mode", help="mode", default='RA', type=str)
-parser.add_argument(
-    "-tt", "--terminalType", help="terminal value", default='g', type=str
-)
+            v[idx] = g_x[idx]
+            it.iternext()
 
-# file
-parser.add_argument(
-    "-st", "--showTime", help="show timestr", action="store_true"
-)
-parser.add_argument("-n", "--name", help="extra name", default='', type=str)
-parser.add_argument(
-    "-of", "--outFolder", help="output file", default='logs/experiments', type=str
-)
-parser.add_argument(
-    "-pf", "--plotFigure", help="plot figures", action="store_true"
-)
-parser.add_argument(
-    "-sf", "--storeFigure", help="store figures", action="store_true"
-)
+        axStyle = env.get_axes()
 
-parser.add_argument(
-    "-lm", "--learnedMargin", help="use classifier-based margin", action="store_true"
-)
+        fig, axes = plt.subplots(1, 2, figsize=(12, 6))
 
-parser.add_argument(
-    "-ld", "--learnedDyn", help="use learned dynamics", action="store_true"
-)
+        ax = axes[0]
+        im = ax.imshow(
+            g_x.T, interpolation='none', extent=axStyle[0], origin="lower",
+            cmap="seismic", vmin=vmin, vmax=vmax, zorder=-1
+        )
+        cbar = fig.colorbar(
+            im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
+        )
+        cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=24)
+        ax.set_title(r'$g(x)$', fontsize=18)
 
-parser.add_argument(
-    "-img", "--image", help="using image observations", action="store_true"
-)
+        ax = axes[1]
+        im = ax.imshow(
+            v.T > 0, interpolation='none', extent=axStyle[0], origin="lower",
+            cmap="seismic", vmin=vmin, vmax=vmax, zorder=-1
+        )
+        cbar = fig.colorbar(
+            im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
+        )
+        cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=24)
+        ax.set_title(r'$v(x)$', fontsize=18)
 
-parser.add_argument(
-    "-d", "--debug", help="dont plot global confusion stats", action="store_true"
-)
+        for ax in axes:
+            env.plot_target_failure_set(ax=ax)
+            env.plot_formatting(ax=ax)
 
-args = parser.parse_args()
-print(args)
+        fig.tight_layout()
+        if args.storeFigure:
+            figurePath = os.path.join(figureFolder, 'env.png')
+            fig.savefig(figurePath)
+        if args.plotFigure:
+            plt.show()
+            plt.pause(0.001)
+        plt.close()
 
-config_path = '/home/kensuke/latent-safety/configs/config.yaml'
-with open(config_path, 'r') as file:
-  config = yaml.safe_load(file)
+def construct_environment(args):
+    config_path = '/home/lassepe/worktree/latent-safety/configs/config.yaml'
+    with open(config_path, 'r') as file:
+        config = yaml.safe_load(file)
 
+    env_name = "dubins_car-v1"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    maxUpdates = args.maxUpdates
+    updateTimes = args.updateTimes
+    updatePeriod = int(maxUpdates / updateTimes)
+    updatePeriodHalf = int(updatePeriod / 2)
+    maxSteps = config['numT'] #100
 
-# == CONFIGURATION ==
-env_name = "dubins_car-v1"
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-maxUpdates = args.maxUpdates
-updateTimes = args.updateTimes
-updatePeriod = int(maxUpdates / updateTimes)
-updatePeriodHalf = int(updatePeriod / 2)
-maxSteps = config['numT'] #100
+    print("\n== Environment Information ==")
+    if args.doneType == 'toEnd':
+        sample_inside_obs = True
+    elif args.doneType == 'TF' or args.doneType == 'fail':
+        sample_inside_obs = False
 
-# == Environment ==
-print("\n== Environment Information ==")
-if args.doneType == 'toEnd':
-  sample_inside_obs = True
-elif args.doneType == 'TF' or args.doneType == 'fail':
-  sample_inside_obs = False
-
-print(env_name)
-print(gym_reachability)
-env = gym.make(
-    env_name, config=config, device=device, mode=args.mode, doneType=args.doneType,
-    sample_inside_obs=sample_inside_obs
-)
-
-
-fn = args.name + '-' + args.doneType
-if args.showTime:
-  fn = fn + '-' + timestr
-
-if args.learnedMargin:
-  env.car.learned_margin=True
-  fn = fn + '-lm'
-else:
-  env.car.learned_margin=False
-
-if args.learnedDyn:
-  env.car.learned_dyn=True
-  fn = fn + '-ld'
-else:
-  env.car.learned_dyn=False
-
-if args.image:
-  env.car.image=True
-  env.car.set_encoder()
-  fn = fn + '-img'
-if args.debug:
-  env.car.debug = True
-outFolder = os.path.join(args.outFolder, 'car-DDQN', fn)
-print(outFolder)
-figureFolder = os.path.join(outFolder, 'figure')
-os.makedirs(figureFolder, exist_ok=True)
-
-
-stateDim = env.state.shape[0]
-actionNum = env.action_space.n
-actionList = np.arange(actionNum)
-print(
-    "State Dimension: {:d}, ActionSpace Dimension: {:d}".format(
-        stateDim, actionNum
+    print(env_name)
+    print(gym_reachability)
+    env = gym.make(
+        env_name, config=config, device=device, mode=args.mode, doneType=args.doneType,
+        sample_inside_obs=sample_inside_obs
     )
-)
 
-# == Setting in this Environment ==
-env.set_speed(speed=config['speed'])
-env.set_constraint(radius=config['obs_r'])
-env.set_radius_rotation(R_turn=config['speed']/config['u_max'])
-print("Dynamic parameters:")
-print("  CAR", end='\n    ')
-print(
-    "Constraint: {:.1f} ".format(env.car.constraint_radius)
-    + "Turn: {:.2f} ".format(env.car.R_turn)
-    + "Max speed: {:.2f} ".format(env.car.speed)
-    + "Max angular speed: {:.3f}".format(env.car.max_turning_rate)
-)
-print("  ENV", end='\n    ')
-print(
-    "Constraint: {:.1f} ".format(env.constraint_radius)
-    + "Turn: {:.2f} ".format(env.R_turn)
-    + "Max speed: {:.2f} ".format(env.speed)
-)
-print(env.car.discrete_controls)
-if 2 * env.R_turn - env.constraint_radius > env.target_radius:
-  print("Type II Reach-Avoid Set")
-else:
-  print("Type I Reach-Avoid Set")
-env.set_seed(args.randomSeed)
+    fn = args.name + '-' + args.doneType
+    if args.showTime:
+        fn = fn + '-' + timestr
 
-# == Get and Plot max{l_x, g_x} ==
-if args.plotFigure or args.storeFigure:
-  nx, ny = 101, 101
-  vmin = -1
-  vmax = 1
+    if args.learnedMargin:
+        env.car.learned_margin=True
+        fn = fn + '-lm'
+    else:
+        env.car.learned_margin=False
 
-  v = np.zeros((nx, ny))
-  #l_x = np.zeros((nx, ny))
-  g_x = np.zeros((nx, ny))
-  xs = np.linspace(env.bounds[0, 0], env.bounds[0, 1], nx)
-  ys = np.linspace(env.bounds[1, 0], env.bounds[1, 1], ny)
+    if args.learnedDyn:
+        env.car.learned_dyn=True
+        fn = fn + '-ld'
+    else:
+        env.car.learned_dyn=False
 
-  it = np.nditer(v, flags=['multi_index'])
+    if args.image:
+        env.car.image=True
+        env.car.set_encoder()
+        fn = fn + '-img'
+    if args.debug:
+        env.car.debug = True
+    outFolder = os.path.join(args.outFolder, 'car-DDQN', fn)
+    print(outFolder)
+    figureFolder = os.path.join(outFolder, 'figure')
+    os.makedirs(figureFolder, exist_ok=True)
 
-  while not it.finished:
-    idx = it.multi_index
-    x = xs[idx[0]]
-    y = ys[idx[1]]
-
-    #l_x[idx] = env.target_margin(np.array([x, y]))
-    g_x[idx] = env.safety_margin(np.array([x, y]))
-
-    #v[idx] = np.maximum(l_x[idx], g_x[idx])
-    v[idx] = g_x[idx]
-    it.iternext()
-
-  axStyle = env.get_axes()
-
-  fig, axes = plt.subplots(1, 2, figsize=(12, 6))
-
-  ax = axes[0]
-  im = ax.imshow(
-      g_x.T, interpolation='none', extent=axStyle[0], origin="lower",
-      cmap="seismic", vmin=vmin, vmax=vmax, zorder=-1
-  )
-  cbar = fig.colorbar(
-      im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
-  )
-  cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=24)
-  ax.set_title(r'$g(x)$', fontsize=18)
-
-  ax = axes[1]
-  im = ax.imshow(
-      v.T > 0, interpolation='none', extent=axStyle[0], origin="lower",
-      cmap="seismic", vmin=vmin, vmax=vmax, zorder=-1
-  )
-  cbar = fig.colorbar(
-      im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax]
-  )
-  cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=24)
-  ax.set_title(r'$v(x)$', fontsize=18)
-
-  for ax in axes:
-    env.plot_target_failure_set(ax=ax)
-    env.plot_formatting(ax=ax)
-
-  fig.tight_layout()
-  if args.storeFigure:
-    figurePath = os.path.join(figureFolder, 'env.png')
-    fig.savefig(figurePath)
-  if args.plotFigure:
-    plt.show()
-    plt.pause(0.001)
-  plt.close()
-
-# == Agent CONFIG ==
-print("\n== Agent Information ==")
-if args.annealing:
-  GAMMA_END = 0.9999
-  EPS_PERIOD = int(updatePeriod / 10)
-  EPS_RESET_PERIOD = updatePeriod
-else:
-  GAMMA_END = args.gamma
-  EPS_PERIOD = updatePeriod
-  EPS_RESET_PERIOD = maxUpdates
-
-CONFIG = dqnConfig(
-    DEVICE=device, ENV_NAME=env_name, SEED=args.randomSeed,
-    MAX_UPDATES=maxUpdates, MAX_EP_STEPS=maxSteps, BATCH_SIZE=64,
-    MEMORY_CAPACITY=args.memoryCapacity, ARCHITECTURE=args.architecture,
-    ACTIVATION=args.actType, GAMMA=args.gamma, GAMMA_PERIOD=updatePeriod,
-    GAMMA_END=GAMMA_END, EPS_PERIOD=EPS_PERIOD, EPS_DECAY=0.7,
-    EPS_RESET_PERIOD=EPS_RESET_PERIOD, LR_C=args.learningRate,
-    LR_C_PERIOD=updatePeriod, LR_C_DECAY=0.8, MAX_MODEL=50
-)
-
-# == AGENT ==
-dimList = [stateDim] + CONFIG.ARCHITECTURE + [actionNum]
-agent = DDQNSingle(
-    CONFIG, actionNum, actionList, dimList=dimList, mode=args.mode,
-    terminalType=args.terminalType
-)
-print("We want to use: {}, and Agent uses: {}".format(device, agent.device))
-print("Critic is using cuda: ", next(agent.Q_network.parameters()).is_cuda)
-
-vmin = -1
-vmax = 1
-if args.warmup:
-  print("\n== Warmup Q ==")
-  lossList = agent.initQ(
-      env, args.warmupIter, outFolder, num_warmup_samples=200, vmin=vmin,
-      vmax=vmax, plotFigure=args.plotFigure, storeFigure=args.storeFigure
-  )
-
-  if args.plotFigure or args.storeFigure:
-    fig, ax = plt.subplots(1, 1, figsize=(4, 4))
-    tmp = np.arange(500, args.warmupIter)
-    # tmp = np.arange(args.warmupIter)
-    ax.plot(tmp, lossList[tmp], 'b-')
-    ax.set_xlabel('Iteration', fontsize=18)
-    ax.set_ylabel('Loss', fontsize=18)
-    plt.tight_layout()
-
-    if args.storeFigure:
-      figurePath = os.path.join(figureFolder, 'initQ_Loss.png')
-      fig.savefig(figurePath)
-    if args.plotFigure:
-      plt.show()
-      plt.pause(0.001)
-    plt.close()
-
-print("\n== Training Information ==")
-vmin = -1
-vmax = 1
-trainRecords, trainProgress = agent.learn(
-    env, MAX_UPDATES=maxUpdates, MAX_EP_STEPS=maxSteps, warmupQ=False,
-    doneTerminate=True, vmin=vmin, vmax=vmax, showBool=True,
-    checkPeriod=args.checkPeriod, outFolder=outFolder,
-    plotFigure=args.plotFigure, storeFigure=args.storeFigure
-)
-
-trainDict = {}
-trainDict['trainRecords'] = trainRecords
-trainDict['trainProgress'] = trainProgress
-filePath = os.path.join(outFolder, 'train')
-
-if args.plotFigure or args.storeFigure:
-  # region: loss
-  fig, axes = plt.subplots(1, 2, figsize=(8, 4))
-
-  data = trainRecords
-  ax = axes[0]
-  ax.plot(data, 'b:')
-  ax.set_xlabel('Iteration (x 1e5)', fontsize=18)
-  ax.set_xticks(np.linspace(0, maxUpdates, 5))
-  ax.set_xticklabels(np.linspace(0, maxUpdates, 5) / 1e5)
-  ax.set_title('loss_critic', fontsize=18)
-  ax.set_xlim(left=0, right=maxUpdates)
-
-  data = trainProgress[:, 0]
-  ax = axes[1]
-  x = np.arange(data.shape[0]) + 1
-  ax.plot(x, data, 'b-o')
-  ax.set_xlabel('Index', fontsize=18)
-  ax.set_xticks(x)
-  ax.set_title('Success Rate', fontsize=18)
-  ax.set_xlim(left=1, right=data.shape[0])
-  ax.set_ylim(0, 0.8)
-
-  fig.tight_layout()
-  if args.storeFigure:
-    figurePath = os.path.join(figureFolder, 'train_loss_success.png')
-    fig.savefig(figurePath)
-  if args.plotFigure:
-    plt.show()
-    plt.pause(0.001)
-  plt.close()
-  # endregion
-
-  # region: value_rollout_action
-  idx = np.argmax(trainProgress[:, 0]) + 1
-  successRate = np.amax(trainProgress[:, 0])
-  print('We pick model with success rate-{:.3f}'.format(successRate))
-  agent.restore(idx * args.checkPeriod, outFolder)
-
-  nx = 101
-  ny = nx
-  xs = np.linspace(env.bounds[0, 0], env.bounds[0, 1], nx)
-  ys = np.linspace(env.bounds[1, 0], env.bounds[1, 1], ny)
-
-  resultMtx = np.empty((nx, ny), dtype=int)
-  actDistMtx = np.empty((nx, ny), dtype=int)
-  it = np.nditer(resultMtx, flags=['multi_index'])
-
-  while not it.finished:
-    idx = it.multi_index
-    print(idx, end='\r')
-    x = xs[idx[0]]
-    y = ys[idx[1]]
-
-    state = np.array([x, y, 0.])
-    stateTensor = torch.FloatTensor(state).to(agent.device).unsqueeze(0)
-    action_index = agent.Q_network(stateTensor).max(dim=1)[1].item()
-    actDistMtx[idx] = action_index
-
-    _, result, _, _ = env.simulate_one_trajectory(
-        agent.Q_network, T=250, state=state, toEnd=False
+    stateDim = env.state.shape[0]
+    actionNum = env.action_space.n
+    actionList = np.arange(actionNum)
+    print(
+        "State Dimension: {:d}, ActionSpace Dimension: {:d}".format(
+            stateDim, actionNum
+        )
     )
-    resultMtx[idx] = result
-    it.iternext()
 
-  fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharex=True, sharey=True)
-  axStyle = env.get_axes()
+    env.set_speed(speed=config['speed'])
+    env.set_constraint(radius=config['obs_r'])
+    env.set_radius_rotation(R_turn=config['speed']/config['u_max'])
+    print("Dynamic parameters:")
+    print("  CAR", end='\n    ')
+    print(
+        "Constraint: {:.1f} ".format(env.car.constraint_radius)
+        + "Turn: {:.2f} ".format(env.car.R_turn)
+        + "Max speed: {:.2f} ".format(env.car.speed)
+        + "Max angular speed: {:.3f}".format(env.car.max_turning_rate)
+    )
+    print("  ENV", end='\n    ')
+    print(
+        "Constraint: {:.1f} ".format(env.constraint_radius)
+        + "Turn: {:.2f} ".format(env.R_turn)
+        + "Max speed: {:.2f} ".format(env.speed)
+    )
+    print(env.car.discrete_controls)
+    if 2 * env.R_turn - env.constraint_radius > env.target_radius:
+        print("Type II Reach-Avoid Set")
+    else:
+        print("Type I Reach-Avoid Set")
+    env.set_seed(args.randomSeed)
 
-  # = Action
-  ax = axes[2]
-  im = ax.imshow(
-      actDistMtx.T, interpolation='none', extent=axStyle[0], origin="lower",
-      cmap='seismic', vmin=0, vmax=actionNum - 1, zorder=-1
-  )
-  ax.set_xlabel('Action', fontsize=24)
+    visualize_env_failure_sets(env, args, figureFolder)
 
-  # = Rollout
-  ax = axes[1]
-  im = ax.imshow(
-      resultMtx.T != 1, interpolation='none', extent=axStyle[0],
-      origin="lower", cmap='seismic', vmin=0, vmax=1, zorder=-1
-  )
-  env.plot_trajectories(
-      agent.Q_network, states=env.visual_initial_states, toEnd=False, ax=ax,
-      c='w', lw=1.5, T=100, orientation=-np.pi / 2
-  )
-  ax.set_xlabel('Rollout RA', fontsize=24)
+    info = {
+        "vmin": -1,
+        "vmax": 1,
+        "updatePeriod": updatePeriod,
+        "updatePeriodHalf": updatePeriodHalf,
+        "device": device,
+        "env_name": env_name,
+        "outFolder": outFolder,
+        "figureFolder": figureFolder,
+        "stateDim": stateDim,
+        "actionNum": actionNum,
+        "actionList": actionList,
+        "maxUpdates": maxUpdates,
+        "maxSteps": maxSteps,
+    }
 
-  # = Value
-  ax = axes[0]
-  v = env.get_value(agent.Q_network, theta=0, nx=nx, ny=ny)
-  im = ax.imshow(
-      v.T, interpolation='none', extent=axStyle[0], origin="lower",
-      cmap='seismic', vmin=vmin, vmax=vmax, zorder=-1
-  )
-  CS = ax.contour(
-      xs, ys, v.T, levels=[0], colors='k', linewidths=2, linestyles='dashed'
-  )
-  ax.set_xlabel('Value', fontsize=24)
+    return env, info
 
-  for ax in axes:
-    env.plot_target_failure_set(ax=ax)
-    env.plot_reach_avoid_set(ax=ax)
-    env.plot_formatting(ax=ax)
+def construct_agent(args, environment_info):
+    if args.annealing:
+        GAMMA_END = 0.9999
+        EPS_PERIOD = int(environment_info["updatePeriod"] / 10)
+        EPS_RESET_PERIOD = environment_info["updatePeriod"]
+    else:
+        GAMMA_END = args.gamma
+        EPS_PERIOD = environment_info["updatePeriod"]
+        EPS_RESET_PERIOD = environment_info["maxUpdates"]
 
-  fig.tight_layout()
-  if args.storeFigure:
-    figurePath = os.path.join(figureFolder, 'value_rollout_action.png')
-    fig.savefig(figurePath)
-  if args.plotFigure:
-    plt.show()
-    plt.pause(0.001)
-  # endregion
+    CONFIG = dqnConfig(
+        DEVICE=environment_info["device"],
+        ENV_NAME=environment_info["env_name"],
+        SEED=args.randomSeed,
+        MAX_UPDATES=environment_info["maxUpdates"],
+        MAX_EP_STEPS=environment_info["maxSteps"],
+        BATCH_SIZE=64,
+        MEMORY_CAPACITY=args.memoryCapacity,
+        ARCHITECTURE=args.architecture,
+        ACTIVATION=args.actType,
+        GAMMA=args.gamma,
+        GAMMA_PERIOD=environment_info["updatePeriod"],
+        GAMMA_END=GAMMA_END,
+        EPS_PERIOD=EPS_PERIOD,
+        EPS_DECAY=0.7,
+        EPS_RESET_PERIOD=EPS_RESET_PERIOD,
+        LR_C=args.learningRate,
+        LR_C_PERIOD=environment_info["updatePeriod"],
+        LR_C_DECAY=0.8,
+        MAX_MODEL=50
+    )
 
-  trainDict['resultMtx'] = resultMtx
-  trainDict['actDistMtx'] = actDistMtx
+    dimList = [environment_info["stateDim"]] + CONFIG.ARCHITECTURE + [environment_info["actionNum"]]
+    agent = DDQNSingle(
+        CONFIG, environment_info["actionNum"], environment_info["actionList"],
+        dimList=dimList, mode=args.mode, terminalType=args.terminalType
+    )
 
-save_obj(trainDict, filePath)
+    return agent
+
+def warmup_Q(agent, env, environment_info, args):
+    print("\n== Warmup Q ==")
+    lossList = agent.initQ(
+        env, args.warmupIter, environment_info["outFolder"],
+        num_warmup_samples=200, vmin=environment_info["vmin"],
+        vmax=environment_info["vmax"],
+        plotFigure=args.plotFigure, storeFigure=args.storeFigure
+    )
+
+    if args.plotFigure or args.storeFigure:
+        fig, ax = plt.subplots(1, 1, figsize=(4, 4))
+        tmp = np.arange(500, args.warmupIter)
+        ax.plot(tmp, lossList[tmp], 'b-')
+        ax.set_xlabel('Iteration', fontsize=18)
+        ax.set_ylabel('Loss', fontsize=18)
+        plt.tight_layout()
+
+        if args.storeFigure:
+            figurePath = os.path.join(environment_info["figureFolder"], 'initQ_Loss.png')
+            fig.savefig(figurePath)
+        if args.plotFigure:
+            plt.show()
+            plt.pause(0.001)
+        plt.close()
+
+def evaluate_training(trainRecords, trainProgress, env, agent, environment_info, args):
+    trainDict = {}
+    trainDict['trainRecords'] = trainRecords
+    trainDict['trainProgress'] = trainProgress
+    filePath = os.path.join(environment_info["outFolder"], 'train')
+
+    if args.plotFigure or args.storeFigure:
+        fig, axes = plt.subplots(1, 2, figsize=(8, 4))
+
+        data = trainRecords
+        ax = axes[0]
+        ax.plot(data, 'b:')
+        ax.set_xlabel('Iteration (x 1e5)', fontsize=18)
+        ax.set_xticks(np.linspace(0, environment_info["maxUpdates"], 5))
+        ax.set_xticklabels(np.linspace(0, environment_info["maxUpdates"], 5) / 1e5)
+        ax.set_title('loss_critic', fontsize=18)
+        ax.set_xlim(left=0, right=environment_info["maxUpdates"])
+
+        data = trainProgress[:, 0]
+        ax = axes[1]
+        x = np.arange(data.shape[0]) + 1
+        ax.plot(x, data, 'b-o')
+        ax.set_xlabel('Index', fontsize=18)
+        ax.set_xticks(x)
+        ax.set_title('Success Rate', fontsize=18)
+        ax.set_xlim(left=1, right=data.shape[0])
+        ax.set_ylim(0, 0.8)
+
+        fig.tight_layout()
+        if args.storeFigure:
+            figurePath = os.path.join(environment_info["figureFolder"], 'train_loss_success.png')
+            fig.savefig(figurePath)
+        if args.plotFigure:
+            plt.show()
+            plt.pause(0.001)
+        plt.close()
+
+        idx = np.argmax(trainProgress[:, 0]) + 1
+        successRate = np.amax(trainProgress[:, 0])
+        print('We pick model with success rate-{:.3f}'.format(successRate))
+        agent.restore(idx * args.checkPeriod, environment_info["outFolder"])
+
+        nx = 101
+        ny = nx
+        xs = np.linspace(env.bounds[0, 0], env.bounds[0, 1], nx)
+        ys = np.linspace(env.bounds[1, 0], env.bounds[1, 1], ny)
+
+        resultMtx = np.empty((nx, ny), dtype=int)
+        actDistMtx = np.empty((nx, ny), dtype=int)
+        it = np.nditer(resultMtx, flags=['multi_index'])
+
+        while not it.finished:
+            idx = it.multi_index
+            print(idx, end='\r')
+            x = xs[idx[0]]
+            y = ys[idx[1]]
+
+            state = np.array([x, y, 0.])
+            stateTensor = torch.FloatTensor(state).to(agent.device).unsqueeze(0)
+            action_index = agent.Q_network(stateTensor).max(dim=1)[1].item()
+            actDistMtx[idx] = action_index
+
+            _, result, _, _ = env.simulate_one_trajectory(
+                agent.Q_network, T=250, state=state, toEnd=False
+            )
+            resultMtx[idx] = result
+            it.iternext()
+
+        fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharex=True, sharey=True)
+        axStyle = env.get_axes()
+
+        ax = axes[2]
+        im = ax.imshow(
+            actDistMtx.T, interpolation='none', extent=axStyle[0], origin="lower",
+            cmap='seismic', vmin=0, vmax=environment_info["actionNum"] - 1, zorder=-1
+        )
+        ax.set_xlabel('Action', fontsize=24)
+
+        ax = axes[1]
+        im = ax.imshow(
+            resultMtx.T != 1, interpolation='none', extent=axStyle[0],
+            origin="lower", cmap='seismic', vmin=0, vmax=1, zorder=-1
+        )
+        env.plot_trajectories(
+            agent.Q_network, states=env.visual_initial_states, toEnd=False, ax=ax,
+            c='w', lw=1.5, T=100, orientation=-np.pi / 2
+        )
+        ax.set_xlabel('Rollout RA', fontsize=24)
+
+        ax = axes[0]
+        v = env.get_value(agent.Q_network, theta=0, nx=nx, ny=ny)
+        im = ax.imshow(
+            v.T, interpolation='none', extent=axStyle[0], origin="lower",
+            cmap='seismic', vmin=environment_info["vmin"], vmax=environment_info["vmax"], zorder=-1
+        )
+        CS = ax.contour(
+            xs, ys, v.T, levels=[0], colors='k', linewidths=2, linestyles='dashed'
+        )
+        ax.set_xlabel('Value', fontsize=24)
+
+        for ax in axes:
+            env.plot_target_failure_set(ax=ax)
+            env.plot_reach_avoid_set(ax=ax)
+            env.plot_formatting(ax=ax)
+
+        fig.tight_layout()
+        if args.storeFigure:
+            figurePath = os.path.join(environment_info["figureFolder"], 'value_rollout_action.png')
+            fig.savefig(figurePath)
+        if args.plotFigure:
+            plt.show()
+            plt.pause(0.001)
+
+        trainDict['resultMtx'] = resultMtx
+        trainDict['actDistMtx'] = actDistMtx
+
+    save_obj(trainDict, filePath)
+
+def RARL(args):
+    env, environment_info = construct_environment(args)
+    agent = construct_agent(args, environment_info)
+    if args.warmup:
+        warmup_Q(agent, env, environment_info, args)
+
+    print("\n== Training Information ==")
+    trainRecords, trainProgress = agent.learn(
+        env, MAX_UPDATES=environment_info["maxUpdates"],
+        MAX_EP_STEPS=environment_info["maxSteps"], warmupQ=False,
+        doneTerminate=True, vmin=environment_info["vmin"], vmax=environment_info["vmax"], showBool=True,
+        checkPeriod=args.checkPeriod, outFolder=environment_info["outFolder"],
+        plotFigure=args.plotFigure, storeFigure=args.storeFigure
+    )
+
+    evaluate_training(trainRecords, trainProgress, env, agent, environment_info, args)
+
+def get_config(parse_args=True):
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "-dt", "--doneType", help="when to raise done flag", default='toEnd',
+        type=str
+    )
+    parser.add_argument(
+        "-ct", "--costType", help="cost type", default='sparse', type=str
+    )
+    parser.add_argument(
+        "-rnd", "--randomSeed", help="random seed", default=0, type=int
+    )
+
+    parser.add_argument(
+        "-cr", "--consRadius", help="constraint radius", default=0.5, type=float
+    )
+    parser.add_argument(
+        "-tr", "--targetRadius", help="target radius", default=.5, type=float
+    )
+    parser.add_argument(
+        "-turn", "--turnRadius", help="turning radius", default=1/1.25, type=float
+    )
+    parser.add_argument("-s", "--speed", help="speed", default=1., type=float)
+
+    parser.add_argument(
+        "-w", "--warmup", help="warmup Q-network", action="store_true"
+    )
+    parser.add_argument(
+        "-wi", "--warmupIter", help="warmup iteration", default=10000, type=int
+    )
+    parser.add_argument(
+        "-mu", "--maxUpdates", help="maximal #gradient updates", default=400000,
+        type=int
+    )
+    parser.add_argument(
+        "-ut", "--updateTimes", help="#hyper-param. steps", default=20, type=int
+    )
+    parser.add_argument(
+        "-mc", "--memoryCapacity", help="memoryCapacity", default=10000, type=int
+    )
+    parser.add_argument(
+        "-cp", "--checkPeriod", help="check period", default=20000, type=int
+    )
+
+    parser.add_argument(
+        "-a", "--annealing", help="gamma annealing", action="store_true"
+    )
+    parser.add_argument(
+        "-arc", "--architecture", help="NN architecture", default=[100, 100],
+        nargs="*", type=int
+    )
+    parser.add_argument(
+        "-lr", "--learningRate", help="learning rate", default=1e-3, type=float
+    )
+    parser.add_argument(
+        "-g", "--gamma", help="contraction coeff.", default=0.9999, type=float
+    )
+    parser.add_argument(
+        "-act", "--actType", help="activation type", default='Tanh', type=str
+    )
+
+    parser.add_argument("-m", "--mode", help="mode", default='RA', type=str)
+    parser.add_argument(
+        "-tt", "--terminalType", help="terminal value", default='g', type=str
+    )
+
+    parser.add_argument(
+        "-st", "--showTime", help="show timestr", action="store_true"
+    )
+    parser.add_argument("-n", "--name", help="extra name", default='', type=str)
+    parser.add_argument(
+        "-of", "--outFolder", help="output file", default='logs/experiments', type=str
+    )
+    parser.add_argument(
+        "-pf", "--plotFigure", help="plot figures", action="store_true"
+    )
+    parser.add_argument(
+        "-sf", "--storeFigure", help="store figures", action="store_true"
+    )
+
+    parser.add_argument(
+        "-lm", "--learnedMargin", help="use classifier-based margin", action="store_true"
+    )
+
+    parser.add_argument(
+        "-ld", "--learnedDyn", help="use learned dynamics", action="store_true"
+    )
+
+    parser.add_argument(
+        "-img", "--image", help="using image observations", action="store_true"
+    )
+
+    parser.add_argument(
+        "-d", "--debug", help="dont plot global confusion stats", action="store_true"
+    )
+
+    if parse_args:
+      args = parser.parse_args()
+    else:
+      args = parser.parse_args([])
+
+    return args
+
+if __name__ == "__main__":
+    args = get_config()
+    RARL(args)

@@ -359,6 +359,11 @@ def evaluate(
         save_obj(value_function_evaluation, value_function_evaluation_path)
     value_function_evaluation = load_obj(value_function_evaluation_path)
     figure = visualize_value_function_evaluation(value_function_evaluation)
+    # save a high-quality version of the figure for publication:
+    figure.savefig(
+        os.path.join(output_folder, experiment_name + "_value_function_evaluation.jpg"),
+        dpi=300,
+    )
     if the_ipython_instance is not None and show_plots:
         IPython.display.display(figure)
 
@@ -391,6 +396,11 @@ def evaluate(
         generate_representative_rollout_videos(
             env, evaluated_rollouts, output_folder, experiment_name
         )
+    # save a high-quality version of the figure for publication:
+    plt.write_image(
+        os.path.join(output_folder, experiment_name + "_open_loop_rollout_evaluation.jpg"),
+        scale=3  # Higher scale for better quality
+    )
     if the_ipython_instance is not None and show_plots:
         IPython.display.display(plt)
 
@@ -427,6 +437,12 @@ def evaluate(
             output_folder,
             f"open_loop_{experiment_name}",
         )
+
+    # save a high-quality version of the figure for publication:
+    plt.write_image(
+        os.path.join(output_folder, experiment_name + "_open_loop_rollout_evaluation.jpg"),
+        scale=3  # Higher scale for better quality
+    )
     if the_ipython_instance is not None and show_plots:
         IPython.display.display(plt)
 
@@ -453,8 +469,17 @@ def evaluate(
             classifier_evaluation["g_x"],
             classifier_evaluation["labels"],
         )
+        # save a high-quality version of the figure for publication:
+        img = Image.fromarray(plot_array)
+        img.save(
+            os.path.join(
+                output_folder,
+                f"{experiment_name}_classifier_evaluation_theta{int(theta*180/math.pi):02d}deg.jpg",
+            ),
+            dpi=(300, 300),
+        )
         if the_ipython_instance is not None:
-            IPython.display.display(Image.fromarray(plot_array))
+            IPython.display.display(img)
 
 
 # %% base setup

@@ -496,7 +496,8 @@ class DubinsCarOneEnv(gym.Env):
   # == Trajectory Functions ==
   def simulate_one_trajectory(
       self, q_func, T=10, state=None, theta=None, sample_inside_obs=True,
-      sample_inside_tar=True, toEnd=False
+      sample_inside_tar=True, toEnd=False, enable_observation_feedback=False,
+      wait_for_all_metrics_to_predict_failure=False
   ):
     """Simulates the trajectory given the state or randomly initialized.
 
@@ -514,6 +515,8 @@ class DubinsCarOneEnv(gym.Env):
             of the targets or not. Defaults to True.
         toEnd (bool, optional): simulate the trajectory until the robot
             crosses the boundary or not. Defaults to False.
+        enable_observation_feedback (bool, optional): enable observation feedback. Defaults to False.
+        wait_for_all_metrics_to_predict_failure (bool, optional): wait for all metrics to predict failure. Defaults to False.
 
     Returns:
         np.ndarray: states of the trajectory, of the shape (length, 3).
@@ -567,7 +570,9 @@ class DubinsCarOneEnv(gym.Env):
     return traj, result, minV, info
 
   def simulate_trajectories(
-      self, q_func, T=10, num_rnd_traj=None, states=None, toEnd=False
+      self, q_func, T=10, num_rnd_traj=None, states=None, theta=0, toEnd=False, enable_observation_feedback=False,
+      wait_for_all_metrics_to_predict_failure=False, return_infos=False,
+      position_gridsize=41
   ):
     """
     Simulates the trajectories. If the states are not provided, we pick the
@@ -582,6 +587,10 @@ class DubinsCarOneEnv(gym.Env):
             states to its value. Defaults to None.
         toEnd (bool, optional): simulate the trajectory until the robot
             crosses the boundary or not. Defaults to False.
+        enable_observation_feedback (bool, optional): enable observation feedback. Defaults to False.
+        wait_for all_metrics_to_predict_failure (bool, optional): wait for all metrics to predict failure. Defaults to False.
+        return_infos (bool, optional): return additional information. Defaults to False.
+        position_gridsize (int, optional): grid size for position. Defaults to 41.
 
     Returns:
         list of np.ndarray: each element is a tuple consisting of x and y
@@ -595,12 +604,13 @@ class DubinsCarOneEnv(gym.Env):
     trajectories = []
 
     if states is None:
-      nx = 41
+      nx = position_gridsize
       ny = nx
       xs = np.linspace(self.bounds[0, 0], self.bounds[0, 1], nx)
       ys = np.linspace(self.bounds[1, 0], self.bounds[1, 1], ny)
       results = np.empty((nx, ny), dtype=int)
       minVs = np.empty((nx, ny), dtype=float)
+      infos = np.empty((nx, ny), dtype=object)
 
       it = np.nditer(results, flags=["multi_index"])
       print()
@@ -609,27 +619,38 @@ class DubinsCarOneEnv(gym.Env):
         print(idx, end="\r")
         x = xs[idx[0]]
         y = ys[idx[1]]
-        state = np.array([x, y, 0.0])
-        traj, result, minV, _ = self.simulate_one_trajectory(
-            q_func, T=T, state=state, toEnd=toEnd
+        state = np.array([x, y, theta])
+        traj, result, minV, info = self.simulate_one_trajectory(
+            q_func, T=T, state=state, toEnd=toEnd,
+            enable_observation_feedback=enable_observation_feedback,
+            wait_for_all_metrics_to_predict_failure=wait_for_all_metrics_to_predict_failure
         )
         trajectories.append((traj))
         results[idx] = result
         minVs[idx] = minV
+        infos[idx] = info
         it.iternext()
       results = results.reshape(-1)
       minVs = minVs.reshape(-1)
+      infos = infos.reshape(-1)
 
     else:
       results = np.empty(shape=(len(states),), dtype=int)
       minVs = np.empty(shape=(len(states),), dtype=float)
+      infos = np.empty(shape=(len(states),), dtype=object)
       for idx, state in enumerate(states):
-        traj, result, minV, _ = self.simulate_one_trajectory(
-            q_func, T=T, state=state, toEnd=toEnd
+        traj, result, minV, info = self.simulate_one_trajectory(
+            q_func, T=T, state=state, toEnd=toEnd,
+            enable_observation_feedback=enable_observation_feedback,
+            wait_for_all_metrics_to_predict_failure=wait_for_all_metrics_to_predict_failure
         )
         trajectories.append(traj)
         results[idx] = result
         minVs[idx] = minV
+        infos[idx] = info
+
+    if return_infos:
+      return trajectories, results, minVs, infos
 
     return trajectories, results, minVs
 
@@ -878,7 +899,11 @@ class DubinsCarOneEnv(gym.Env):
 
   def plot_trajectories(
       self, q_func, T=100, num_rnd_traj=None, states=None, theta=None,
-      toEnd=False, ax=None, c="y", lw=1.5, orientation=0, zorder=2
+      toEnd=False, ax=None, c="y", lw=1.5, orientation=0, zorder=2,
+      enable_observation_feedback=False,
+      wait_for_all_metrics_to_predict_failure=False,
+      save_dir=None, return_infos=False,
+      position_gridsize=None
   ):
     """Plots trajectories given the agent's Q-network.
 
@@ -899,6 +924,11 @@ class DubinsCarOneEnv(gym.Env):
         orientation (float, optional): counter-clockwise angle. Defaults
             to 0.
         zorder (int, optional): graph layers order. Defaults to 2.
+        enable_observation_feedback (bool, optional): enable observation feedback. Defaults to False.
+        wait_for_all_metrics_to_predict_failure (bool, optional): wait for all metrics to predict failure. Defaults to False.
+        save_dir (str, optional): directory to save the plot. Defaults to None.
+        return_infos (bool, optional): return additional information. Defaults to False.
+        position_gridsize (int, optional): grid size for position. Defaults to None.
 
     Returns:
         np.ndarray: the binary reach-avoid outcomes.
@@ -918,9 +948,15 @@ class DubinsCarOneEnv(gym.Env):
         tmpStates.append(np.array([xtilde, ytilde, thetatilde]))
       states = tmpStates
 
-    trajectories, results, minVs = self.simulate_trajectories(
-        q_func, T=T, num_rnd_traj=num_rnd_traj, states=states, toEnd=toEnd
+    _simulation_output = self.simulate_trajectories(
+        q_func, T=T, num_rnd_traj=num_rnd_traj, states=states, theta=theta, toEnd=toEnd,
+        enable_observation_feedback=enable_observation_feedback,
+        wait_for_all_metrics_to_predict_failure=wait_for_all_metrics_to_predict_failure,
+        return_infos=return_infos,
+        position_gridsize=position_gridsize,
     )
+    trajectories, results, minVs, infos = _simulation_output if return_infos else (*_simulation_output, None)
+
     if ax is None:
       ax = plt.gca()
     for traj in trajectories:
@@ -928,6 +964,12 @@ class DubinsCarOneEnv(gym.Env):
       traj_y = traj[:, 1]
       ax.scatter(traj_x[0], traj_y[0], s=48, c=c, zorder=zorder)
       ax.plot(traj_x, traj_y, color=c, linewidth=lw, zorder=zorder)
+
+    if save_dir is not None:
+      plt.savefig(save_dir, bbox_inches='tight')
+
+    if return_infos:
+      return results, minVs, infos
 
     return results, minVs
 

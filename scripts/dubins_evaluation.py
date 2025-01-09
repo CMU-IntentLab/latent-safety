@@ -377,6 +377,9 @@ def evaluate(
     if the_ipython_instance is not None and show_plots:
         IPython.display.display(figure)
 
+    for key in [ "tn", "tp", "fn", "fp", "accuracy", "precision", "recall", "f1"]:
+        print(f"{key}: {value_function_evaluation[key]:.3f}")
+
     # pretty print the metrics
     # for key, value in value_function_metrics.items():
     #     print(f"{key}: {value:.3f}")
@@ -612,8 +615,8 @@ for experiment_name, experiment_setup in experiment_setups.items():
     print(f"Running evaluation for {experiment_name}")
     if experiment_setup['dreamer'] is not None:
         img = Image.fromarray(experiment_setup["env"].capture_image())
-    if the_ipython_instance is not None:
-        IPython.display.display(img)
+        if the_ipython_instance is not None:
+            IPython.display.display(img)
     evaluate(
         env=experiment_setup["env"],
         agent=experiment_setup["agent"],

@@ -175,6 +175,7 @@ def evaluate_rollout_data(env, rollout_data, ground_truth_brt):
 
     for theta_data in rollout_data.values():
         for rollout_info in theta_data.values():
+            print("rollout info type: ", type(rollout_info))
             # extract relevant information from the rollout
             # ground truth metrics
             ground_truth_metrics = rollout_info["groundtruth_metrics"]
@@ -459,42 +460,43 @@ def evaluate(
     # --- create publication ready figures
     # TODO: maybe move this code to another function or even separate notebook
     # visualize failure classifier
-    for theta in [0, math.pi / 2]:
-        classifier_eval_path = os.path.join(
-            output_folder,
-            # file name to 2 digits
-            f"{experiment_name}_classifier_evaluation_theta{int(theta*180/math.pi):02d}deg",
-        )
-        if reproduce_classifier_eval or not os.path.exists(f"{classifier_eval_path}.pkl"):
-            print("reproduce_classifier_eval: ", reproduce_classifier_eval)
-            print("exists: ", os.path.exists(classifier_eval_path))
-            lx_classifier_mlp.eval()
-            classifier_evaluation = dreamer.evaluate_classifier(
-                lx_classifier_mlp, theta
-            )
-            save_obj(classifier_evaluation, classifier_eval_path)
-        classifier_evaluation = load_obj(classifier_eval_path)
-        plot_array, *_ = dreamer.plot_classifier_evaluation(
-            classifier_evaluation["v"],
-            classifier_evaluation["g_x"],
-            classifier_evaluation["labels"],
-        )
-        # save a high-quality version of the figure for publication:
-        img = Image.fromarray(plot_array)
-        img.save(
-            os.path.join(
+    if dreamer is not None:
+        for theta in [0, math.pi / 2]:
+            classifier_eval_path = os.path.join(
                 output_folder,
-                f"{experiment_name}_classifier_evaluation_theta{int(theta*180/math.pi):02d}deg.jpg",
-            ),
-            dpi=(300, 300),
-        )
-        if the_ipython_instance is not None:
-            IPython.display.display(img)
+                # file name to 2 digits
+                f"{experiment_name}_classifier_evaluation_theta{int(theta*180/math.pi):02d}deg",
+            )
+            if reproduce_classifier_eval or not os.path.exists(f"{classifier_eval_path}.pkl"):
+                print("reproduce_classifier_eval: ", reproduce_classifier_eval)
+                print("exists: ", os.path.exists(classifier_eval_path))
+                lx_classifier_mlp.eval()
+                classifier_evaluation = dreamer.evaluate_classifier(
+                    lx_classifier_mlp, theta
+                )
+                save_obj(classifier_evaluation, classifier_eval_path)
+            classifier_evaluation = load_obj(classifier_eval_path)
+            plot_array, *_ = dreamer.plot_classifier_evaluation(
+                classifier_evaluation["v"],
+                classifier_evaluation["g_x"],
+                classifier_evaluation["labels"],
+            )
+            # save a high-quality version of the figure for publication:
+            img = Image.fromarray(plot_array)
+            img.save(
+                os.path.join(
+                    output_folder,
+                    f"{experiment_name}_classifier_evaluation_theta{int(theta*180/math.pi):02d}deg.jpg",
+                ),
+                dpi=(300, 300),
+            )
+            if the_ipython_instance is not None:
+                IPython.display.display(img)
             
 # %% priviliged agent setup
-args_priv = RARL.get_config(parse_args=False)
-env_priv, environment_info_priv = RARL.construct_environment(args_priv)
-agent_priv = load_best_privileged_agent(args_priv, environment_info_priv)
+config_priv = RARL.get_config(parse_args=False)
+env_priv, environment_info_priv = RARL.construct_environment(config_priv)
+agent_priv = load_best_privileged_agent(config_priv, environment_info_priv)
 
 # %% base setup
 position_gridsize = 10
@@ -517,7 +519,17 @@ experiment_setups = {}
 experiment_setups["nominal"] = {
     "env": default_env,
     "ground_truth_brt": default_ground_truth_brt,
+    "agent": agent,
+    "dreamer": dreamer,
 }
+
+experiment_setups["nominal_priv"] = {
+    "env": env_priv,
+    "ground_truth_brt": default_ground_truth_brt,
+    "agent": agent_priv,
+    "dreamer": None,
+}
+
 # -------------------------------------------------------appearance ood setups
 run_app_ood_setups = False
 if run_app_ood_setups:
@@ -599,13 +611,14 @@ if run_position_ood_setups:
 # run all of the experiment setups in sequence
 for experiment_name, experiment_setup in experiment_setups.items():
     print(f"Running evaluation for {experiment_name}")
-    img = Image.fromarray(experiment_setup["env"].capture_image())
+    if experiment_setup['dreamer'] is not None:
+        img = Image.fromarray(experiment_setup["env"].capture_image())
     if the_ipython_instance is not None:
         IPython.display.display(img)
     evaluate(
         env=experiment_setup["env"],
-        agent=agent,
-        dreamer=dreamer,
+        agent=experiment_setup["agent"],
+        dreamer=experiment_setup["dreamer"],
         lx_classifier_mlp=lx_classifier_mlp,
         ground_truth_brt=experiment_setup["ground_truth_brt"],
         experiment_name=experiment_name,
@@ -615,3 +628,4 @@ for experiment_name, experiment_setup in experiment_setups.items():
         reproduce_open_loop_rollouts=False,
         reproduce_value_function=False,
     )
+# %%

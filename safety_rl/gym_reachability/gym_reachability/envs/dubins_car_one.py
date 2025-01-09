@@ -610,7 +610,7 @@ class DubinsCarOneEnv(gym.Env):
       ys = np.linspace(self.bounds[1, 0], self.bounds[1, 1], ny)
       results = np.empty((nx, ny), dtype=int)
       minVs = np.empty((nx, ny), dtype=float)
-      infos = np.empty((nx, ny), dtype=object)
+      infos = {} #np.empty((nx, ny), dtype=object)
 
       it = np.nditer(results, flags=["multi_index"])
       print()
@@ -632,7 +632,6 @@ class DubinsCarOneEnv(gym.Env):
         it.iternext()
       results = results.reshape(-1)
       minVs = minVs.reshape(-1)
-      infos = infos.reshape(-1)
 
     else:
       results = np.empty(shape=(len(states),), dtype=int)

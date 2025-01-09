@@ -39,7 +39,7 @@ def load_best_wm_agent(config, environment_info):
 def load_best_privileged_agent(config, environment_info):
     agent = RARL.construct_agent(config, environment_info)
     # TODO get this index from the training dict based on metrics rather than hard-coding
-    restore_idx = 150_000
+    restore_idx = 400006
     agent.restore(
         restore_idx, os.path.join(project_root, environment_info["outFolder"])
     )
@@ -494,9 +494,7 @@ def evaluate(
 # %% priviliged agent setup
 args_priv = RARL.get_config(parse_args=False)
 env_priv, environment_info_priv = RARL.construct_environment(args_priv)
-
-assert False
-
+agent_priv = load_best_privileged_agent(args_priv, environment_info_priv)
 
 # %% base setup
 position_gridsize = 10

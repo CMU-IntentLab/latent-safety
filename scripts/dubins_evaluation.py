@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import RARL_wm
+import RARL
 import math
 import numpy as np
 import pandas as pd
@@ -26,8 +27,17 @@ if the_ipython_instance is not None:
 
 
 # %% functions
-def load_best_agent(config, environment_info):
+def load_best_wm_agent(config, environment_info):
     agent = RARL_wm.construct_agent(config, environment_info)
+    # TODO get this index from the training dict based on metrics rather than hard-coding
+    restore_idx = 150_000
+    agent.restore(
+        restore_idx, os.path.join(project_root, environment_info["outFolder"])
+    )
+    return agent
+
+def load_best_privileged_agent(config, environment_info):
+    agent = RARL.construct_agent(config, environment_info)
     # TODO get this index from the training dict based on metrics rather than hard-coding
     restore_idx = 150_000
     agent.restore(
@@ -480,6 +490,12 @@ def evaluate(
         )
         if the_ipython_instance is not None:
             IPython.display.display(img)
+            
+# %% priviliged agent setup
+args_priv = RARL.get_config(parse_args=False)
+env_priv, environment_info_priv = RARL.construct_environment(args_priv)
+
+assert False
 
 
 # %% base setup
@@ -489,7 +505,7 @@ default_config = RARL_wm.get_config(parse_args=False)
 default_env, default_environment_info = RARL_wm.construct_environment(
     default_config, visualize_failure_sets=False
 )
-agent = load_best_agent(default_config, default_environment_info)
+agent = load_best_wm_agent(default_config, default_environment_info)
 dreamer = train_wm.set_up_dreamer_training(default_config)["agent"]
 
 lx_classifier_mlp, _ = default_env.car.wm._init_lx_mlp(default_config, 1)

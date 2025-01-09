@@ -104,7 +104,7 @@ def visualize_env_failure_sets(env, args, figureFolder):
 def construct_environment(args):
     config_path = '/home/lassepe/worktree/latent-safety/configs/config.yaml'
     with open(config_path, 'r') as file:
-        config = yaml.safe_load(file)
+        config = argparse.Namespace(**yaml.safe_load(file)['defaults'])
 
     env_name = "dubins_car-v1"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -112,7 +112,8 @@ def construct_environment(args):
     updateTimes = args.updateTimes
     updatePeriod = int(maxUpdates / updateTimes)
     updatePeriodHalf = int(updatePeriod / 2)
-    maxSteps = config['numT'] #100
+    print(config)
+    maxSteps = config.numT #100
 
     print("\n== Environment Information ==")
     if args.doneType == 'toEnd':
@@ -163,9 +164,9 @@ def construct_environment(args):
         )
     )
 
-    env.set_speed(speed=config['speed'])
-    env.set_constraint(radius=config['obs_r'])
-    env.set_radius_rotation(R_turn=config['speed']/config['u_max'])
+    env.set_speed(speed=config.speed)
+    env.set_constraint(radius=config.obs_r)
+    env.set_radius_rotation(R_turn=config.speed/config.u_max)
     print("Dynamic parameters:")
     print("  CAR", end='\n    ')
     print(

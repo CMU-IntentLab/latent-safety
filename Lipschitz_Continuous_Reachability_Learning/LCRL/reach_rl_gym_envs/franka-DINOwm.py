@@ -10,7 +10,7 @@ import matplotlib.patches as patches
 import torch
 import math
 from torch.utils.data import DataLoader
-
+from dino_models import normalize_acs
 
 
 class Franka_DINOWM_Env(gym.Env):
@@ -24,14 +24,14 @@ class Franka_DINOWM_Env(gym.Env):
         self.low = np.array([
             -1., -1., -np.pi
         ])
-        self.device = 'cuda:0'
+        self.device = 'cuda:1'
 
         self.set_wm(*params)
 
         #self.observation_space = spaces.Box(low=self.low, high=self.high, dtype=np.float32)
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(1,1,786), dtype=np.float32)
-        self.action1_space = spaces.Box(low=-1.0, high=1.0, shape=(8,), dtype=np.float32) # control action space
-        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(8,), dtype=np.float32) # joint action space
+        self.action1_space = spaces.Box(low=-1.0, high=1.0, shape=(7,), dtype=np.float32) # control action space
+        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(7,), dtype=np.float32) # joint action space
         self.scalar = 0.15
         self.image_size=128
         self.N = 5 # number of samples to take
@@ -82,6 +82,7 @@ class Franka_DINOWM_Env(gym.Env):
         inputs2 = data['cam_rs_embd'][[0], :].to(self.device)
         inputs1 = data['cam_zed_right_embd'][[0], :].to(self.device)
         acs = data['action'][[0],:].to(self.device)
+        acs = normalize_acs(acs)
         states = data['state'][[0],:].to(self.device)
         
         self.latent = self.wm.forward_features(inputs1, inputs2, states, acs)[:, [0]]

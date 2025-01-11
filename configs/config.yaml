@@ -20,8 +20,8 @@ defaults:
   precision: 32
   debug: False
   video_pred_log: True
-  from_ckpt: /home/kensuke/latent-safety/logs/dreamer_cont/0922/030257/best_pretrain_joint_0_36.pt # /home/kensuke/latent-safety/logs/dreamer_cont_ac/0924/174725/best_pretrain_joint_0_34.pt  
-  lx_ckpt: /home/kensuke/latent-safety/logs/dreamer_cont/0922/030257/best_classifier_0_01.pt #/home/kensuke/latent-safety/logs/dreamer_cont_ac/0924/203146/best_classifier_0_02.pt 
+  from_ckpt: null #/home/kensuke/latent-safety/logs/dreamer_dubins/1112/142958/best_pretrain_joint_0_10.pt #/home/kensuke/latent-safety/logs/dreamer_dubins/1024/060747/best_pretrain_joint_0_33.pt # /home/kensuke/latent-safety/logs/dreamer_cont_ac/0924/174725/best_pretrain_joint_0_34.pt  
+  lx_ckpt: null #/home/kensuke/latent-safety/logs/dreamer_dubins/1112/142958/best_classifier_0_01.pt #/home/kensuke/latent-safety/logs/dreamer_dubins/1024/060747/best_classifier_0_01.pt #/home/kensuke/latent-safety/logs/dreamer_cont_ac/0924/203146/best_classifier_0_02.pt 
   num_actions: 3
 
   from_prefill_dir: null
@@ -50,7 +50,7 @@ defaults:
   # Pretraining
   pretrain_bc_loss_only: True
   pretrain_separately: False
-  pretrain_joint_steps: 40000
+  pretrain_joint_steps: 100000
   pretrain_annealing: null
   pretrain_actor_steps: 0
   pretrain_loss: 'ce'  # 'mse' or 'ce'
@@ -86,7 +86,7 @@ defaults:
   no_joint_steps: False   # if true, don't train joint model/actor
   mask_recur: False   # Mask out recurrent state
   dropout_recur_in_residuals: False   # Apply dropout on recurrent state in the residuals
-  freeze_encoder: True    # Freeze both self.encoder and the embedding from RSSM
+  freeze_encoder: False    # Freeze both self.encoder and the embedding from RSSM
 
   # Boosting
   train_residuals: True
@@ -118,14 +118,14 @@ defaults:
   dyn_mean_act: 'none'
   dyn_std_act: 'sigmoid2'
   dyn_min_std: 0.1
-  grad_heads: ['decoder', 'reward', 'cont']
+  grad_heads: ['decoder', 'failure']
   units: 512
   act: 'SiLU'
   norm: True
   encoder:
-    {mlp_keys: '', cnn_keys: 'image', act: 'SiLU', norm: True, cnn_depth: 32, kernel_size: 4, minres: 4, mlp_layers: 5, mlp_units: 1024, symlog_inputs: True}
+    {mlp_keys: 'obs_state', cnn_keys: 'image', act: 'SiLU', norm: True, cnn_depth: 32, kernel_size: 4, minres: 4, mlp_layers: 5, mlp_units: 1024, symlog_inputs: True}
   decoder:
-    {mlp_keys: '', cnn_keys: 'image', act: 'SiLU', norm: True, cnn_depth: 32, kernel_size: 4, minres: 4, mlp_layers: 5, mlp_units: 1024, cnn_sigmoid: False, image_dist: mse, vector_dist: symlog_mse, outscale: 1.0}
+    {mlp_keys: 'obs_state', cnn_keys: 'image', act: 'SiLU', norm: True, cnn_depth: 32, kernel_size: 4, minres: 4, mlp_layers: 5, mlp_units: 1024, cnn_sigmoid: False, image_dist: mse, vector_dist: symlog_mse, outscale: 1.0}
   actor:
     {layers: 2, dist: 'normal', entropy: 3e-4, unimix_ratio: 0.01, std: 'learned', min_std: 0.1, max_std: 1.0, temp: 0.1, lr: 3e-5, eps: 1e-5, grad_clip: 100.0, outscale: 1.0}
   critic:
@@ -197,7 +197,7 @@ defaults:
   mode: RA
   terminalType: g
   showTime: null
-  name: 'world_model_new'
+  name: 'world_model_new_unfrozen'
   outFolder: logs/experiments
   plotFigure: null
   storeFigure: True
@@ -240,36 +240,52 @@ defaults:
 
 
 
-  #task_lcrl: dubins_wm-v0 # ra_droneracing_Game-v6, ra_highway_Game-v2, ra_1d_Game-v0
-  #reward-threshold: null 
-  ##seed: 0 
-  #buffer-size: 40000 
-  #actor-lr: 1e-4
-  #critic-lr: 1e-3
-  #gamma_lcrl: 0.95 # type=float, default=0.95)
-  #tau: 0.005 # type=float, default=0.005)
-  #exploration-noise: 0.1 # type=float, default=0.1)
-  #epoch: 10 # type=int, default=10)
-  #total-episodes: 160 # type=int, default=160)
-  #step-per-epoch: 40000 # type=int, default=40000)
-  #step-per-collect: 8 # type=int, default=8)
-  #update-per-step: 0.125 # type=float, default=0.125)
-  #batch_size_lcrl: 512 # type=int, default=512)
-  #control-net: [512, 512, 512, 512] # type=int, nargs='*', default=None) # for control policy
-  #disturbance-net: [512, 512, 512, 512] #type=int, nargs='*', default=None) # for disturbance policy
-  #critic-net: [512, 512, 512, 512] # type=int, nargs='*', default=None) # for critic net
-  #training-num: 1 # type=int, default=8)
-  #test-num: 1 # type=int, default=100)
-  #render: 0. # type=float, default=0.)
-  #rew-norm: False # action="store_true", default=False)
-  #n-step: 1 # type=int, default=1)
-  #continue-training-logdir: null # type=str, default=None)
-  #continue-training-epoch: null # type=int, default=None)
-  #actor-gradient-steps: 1 # type=int, default=1)
-  #is-game-baseline: False # type=bool, default=False) # it will be set automatically
-  #target-update-freq: 400 # type=int, default=400)
-#
-  #actor-activation: 'ReLU' #type=str, default='ReLU')
-  #critic-activation: 'ReLU' # type=str, default='ReLU')
-  #kwargs: {} # type=str, default='{}')
-  #warm-start-path: null # type=str, default=None) # e.g., log/ra_droneracing_Game-v6/epoch_id_10/policy.pth
+  # LCRL
+  task_lcrl: franka_wm_DINO-v0 # ra_droneracing_Game-v6, ra_highway_Game-v2, ra_1d_Game-v0
+  reward-threshold: null 
+  #seed: 0 
+  buffer-size: 40000 
+  actor-lr: 1e-4
+  critic-lr: 1e-3
+  gamma_lcrl: 0.95 # type=float, default=0.95)
+  tau: 0.005 # type=float, default=0.005)
+  exploration-noise: 0.1 # type=float, default=0.1)
+  epoch: 10 # type=int, default=10)
+  total-episodes: 60 # type=int, default=160)
+  step-per-epoch: 40000 # type=int, default=40000)
+  step-per-collect: 8 # type=int, default=8)
+  update-per-step: 0.125 # type=float, default=0.125)
+  batch_size_lcrl: 512 # type=int, default=512)
+  control-net: [512, 512, 512, 512] # type=int, nargs='*', default=None) # for control policy
+  disturbance-net: [ 512, 512, 512, 512] #type=int, nargs='*', default=None) # for disturbance policy
+  critic-net: [512, 512, 512, 512] # type=int, nargs='*', default=None) # for critic net
+  training-num: 1 # type=int, default=8)
+  test-num: 1 # type=int, default=100)
+  render: 0. # type=float, default=0.)
+  rew-norm: False # action="store_true", default=False)
+  n-step: 1 # type=int, default=1)
+  continue-training-logdir: null # type=str, default=None)
+  continue-training-epoch: null # type=int, default=None)
+  actor-gradient-steps: 1 # type=int, default=1)
+  is-game-baseline: False # type=bool, default=False) # it will be set automatically
+  target-update-freq: 400 # type=int, default=400)
+  auto-alpha: 1
+  alpha-lr: 3e-4
+  alpha: 0.2 
+
+  actor-activation: 'ReLU' #type=str, default='ReLU')
+  critic-activation: 'ReLU' # type=str, default='ReLU')
+  kwargs: {} # type=str, default='{}')
+  warm-start-path: null # type=str, default=None) # e.g., log/ra_droneracing_Game-v6/epoch_id_10/policy.pth
+
+
+real_robot:
+  image_size: 128
+  train_ratio: 512
+  eval_every: 5e3
+  batch_length: 16
+  video_pred_log: True
+  logdir: "robot_train_logs/dreamer"
+  encoder: {mlp_keys: 'state', cnn_keys: '\w+_image|image\d+$', minres: 2}
+  decoder: {mlp_keys: 'state', cnn_keys: '\w+_image|image\d+$', minres: 2}
+  

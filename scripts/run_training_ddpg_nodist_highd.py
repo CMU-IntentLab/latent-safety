@@ -18,7 +18,7 @@ dreamer_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../model_
 sys.path.append(dreamer_dir)
 print(sys.path)
 
-from train_DINO_wm import VideoTransformer
+from dino_models import VideoTransformer
 #import models
 #import tools
 from model_based_irl_torch.dreamer import models, tools 
@@ -152,13 +152,13 @@ wm = VideoTransformer(
         dropout=0.1
     )
 
-wm.load_state_dict(torch.load('checkpoints/claude_zero_wfail4900.pth'))
-
+#wm.load_state_dict(torch.load('checkpoints/claude_zero_wfail4900.pth'))
+wm.load_state_dict(torch.load('checkpoints/claude_zero_wfail20500_rotvec.pth'))
 
 hdf5_file = '/data/ken/ken_data/skittles_trajectories_unsafe_labeled.h5'
 bs = 1
 bl=20
-device = 'cuda:0'
+device = 'cuda:1'
 H = 3
 expert_data = SplitTrajectoryDataset(hdf5_file, 3, split='train', num_test=100)
 
@@ -332,7 +332,7 @@ def save_best_fn(policy, epoch=epoch):
         policy.state_dict(), 
         os.path.join(
             log_path+"/epoch_id_{}".format(epoch),
-            "policy.pth"
+            "rotvec_policy.pth"
         )
     )
 

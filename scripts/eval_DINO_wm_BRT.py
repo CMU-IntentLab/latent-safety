@@ -75,9 +75,7 @@ from torch import nn
 
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
-from train_DINO_decoder import Decoder
-from train_DINO_wm import VideoTransformer
-
+from dino_models import Decoder, VideoTransformer, normalize_acs
 
 # helpers
 
@@ -219,13 +217,14 @@ wm = VideoTransformer(
         dropout=0.1
     )
 
-wm.load_state_dict(torch.load('checkpoints/claude_zero_wfail4900.pth'))
+#wm.load_state_dict(torch.load('checkpoints/claude_zero_wfail4900.pth'))
+wm.load_state_dict(torch.load('checkpoints/claude_zero_wfail20500_rotvec.pth'))
 
 
 hdf5_file = '/data/ken/ken_data/skittles_trajectories_labeled.h5'
 bs = 1
 bl= 10
-device = 'cuda:0'
+device = 'cuda:1'
 H = 3
 expert_data = SplitTrajectoryDataset(hdf5_file, 3, split='train', num_test=100)
 
@@ -246,7 +245,6 @@ args.action1_shape = env.action1_space.shape or env.action1_space.n
 #args.action2_shape = env.action2_space.shape or env.action2_space.n
 args.max_action1 = env.action1_space.high[0]
 #args.max_action2 = env.action2_space.high[0]
-
 
 
 
@@ -333,7 +331,8 @@ actor1_optim=actor1_optim,
 actor_gradient_steps=args.actor_gradient_steps,
 )
 
-policy.load_state_dict(torch.load('/home/kensuke/latent-safety/scripts/logs/dreamer_dubins/lcrl/1227/151847/lcrl/franka_wm_DINO-v0/wm_actor_activation_ReLU_critic_activation_ReLU_game_gd_steps_1_tau_0.005_training_num_1_buffer_size_40000_c_net_512_4_a1_512_4_a2_512_4_gamma_0.95/noise_0.1_actor_lr_0.0001_critic_lr_0.001_batch_512_step_per_epoch_40000_kwargs_{}_seed_0/epoch_id_100/policy.pth'))
+#policy.load_state_dict(torch.load('/home/kensuke/latent-safety/scripts/logs/dreamer_dubins/lcrl/1227/151847/lcrl/franka_wm_DINO-v0/wm_actor_activation_ReLU_critic_activation_ReLU_game_gd_steps_1_tau_0.005_training_num_1_buffer_size_40000_c_net_512_4_a1_512_4_a2_512_4_gamma_0.95/noise_0.1_actor_lr_0.0001_critic_lr_0.001_batch_512_step_per_epoch_40000_kwargs_{}_seed_0/epoch_id_100/policy.pth'))
+policy.load_state_dict(torch.load('/home/kensuke/latent-safety/scripts/logs/dreamer_dubins/lcrl/0109/140328/lcrl/franka_wm_DINO-v0/wm_actor_activation_ReLU_critic_activation_ReLU_game_gd_steps_1_tau_0.005_training_num_1_buffer_size_40000_c_net_512_4_a1_512_4_a2_512_4_gamma_0.95/noise_0.1_actor_lr_0.0001_critic_lr_0.001_batch_512_step_per_epoch_40000_kwargs_{}_seed_0/epoch_id_100/rotvec_policy.pth'))
 
 def find_a(state):
     tmp_obs = np.array(state).reshape(1,-1)
@@ -426,7 +425,7 @@ if __name__ == "__main__":
     hdf5_file = '/data/ken/ken_data/skittles_trajectories_unsafe_labeled.h5'
     bs = 1
     bl=12
-    device = 'cuda:0'
+    device = 'cuda:1'
     H = 3
     expert_data_imagine = SplitTrajectoryDataset(hdf5_file, bl, split='test', num_test=28)
 
@@ -450,7 +449,8 @@ if __name__ == "__main__":
         dropout=0.1
     ).to(device)
 
-    transition.load_state_dict(torch.load('checkpoints/claude_zero_wfail4900.pth'))
+    #transition.load_state_dict(torch.load('checkpoints/claude_zero_wfail4900.pth'))
+    transition.load_state_dict(torch.load('checkpoints/claude_zero_wfail20500_rotvec.pth'))
     
     transition.eval()
 
@@ -471,8 +471,10 @@ if __name__ == "__main__":
         inputs2 = data['cam_rs_embd'][[0], :H].to(device)
         inputs1 = data['cam_zed_right_embd'][[0], :H].to(device)
         all_acs = data['action'][[0]].to(device)
+        all_acs = normalize_acs(all_acs)
         all_fails = data['failure'][[0]].to(device)
         acs = data['action'][[0],:H].to(device)
+        acs = normalize_acs(acs)
         states = data['state'][[0],:H].to(device)
         im1s = (data['agentview_image'][[0], :H].squeeze().to(device)/255.).detach().cpu().numpy()
         im2s = (data['robot0_eye_in_hand_image'][[0], :H].squeeze().to(device)/255.).detach().cpu().numpy()
@@ -545,12 +547,14 @@ if __name__ == "__main__":
         inputs2 = data['cam_rs_embd'][[0], :H].to(device)
         inputs1 = data['cam_zed_right_embd'][[0], :H].to(device)
         all_acs = data['action'][[0]].to(device)
+        all_acs = normalize_acs(all_acs)
         all_states = data['state'][[0]].to(device)
         all_in2s = data['cam_rs_embd'][[0]].squeeze().to(device)
         all_in1s = data['cam_zed_right_embd'][[0]].squeeze().to(device)
 
 
         acs = data['action'][[0],:H].to(device)
+        acs = normalize_acs(acs)
         states = data['state'][[0],:H].to(device)
         im1s = (data['agentview_image'][[0], :H].squeeze().to(device)/255.).detach().cpu().numpy()
         im2s = (data['robot0_eye_in_hand_image'][[0], :H].squeeze().to(device)/255.).detach().cpu().numpy()

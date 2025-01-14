@@ -1746,11 +1746,13 @@ def create_single_or_ensemble(ensemble_size, ensemble_subsample, name, base_kwar
         model = networks.MLP(**base_kwargs)
     return model
 
-def plot_heatmap(fig, ax, data, title, vmin, vmax, theme, domain, boundary_data = None):
+def plot_heatmap(*, fig, ax, data, title=None, vmin, vmax, theme, domain, boundary_data = None, show_tick_labels=True):
     if theme == "classifier":
-        colors = ["#666666", "white"]  # Mid-gray (#bfbfbf) to white
+        colors = ["#969696", "#E5E5E5"]
+        boundary_color = "black"
     elif theme == "value_function":
-        colors = ["#ec3a2d", "white"]  # Red to white
+        colors = ["#FEA0A0", "#E5E5E5"]
+        boundary_color = "black"
     else: 
         raise NotImplementedError(theme)
 
@@ -1775,19 +1777,32 @@ def plot_heatmap(fig, ax, data, title, vmin, vmax, theme, domain, boundary_data 
         norm=norm,
     )
 
-    ax.contour(
-        boundary_data.T, levels=[0], colors='black', linewidths=2,
-        extent = np.array([-1.1, 1.1, -1.1, 1.1])
-    )
+    if boundary_data is not None:
+        ax.contour(
+            boundary_data.T, levels=[0], colors=boundary_color, linewidths=2,
+            # dashed:
+            linestyles='dashed',
+            extent = np.array([-1.1, 1.1, -1.1, 1.1])
+        )
 
     ax.set_xticks([-1, 0, 1])
     ax.set_yticks([-1, 0, 1])
     ax.tick_params(axis='both', which='major', labelsize=DEFAULT_FONTSIZE)
+    if not show_tick_labels:
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
 
     if domain == "continuous":
         cbar = fig.colorbar(
             im, ax=ax, pad=0.01, fraction=0.05, shrink=.95, ticks=[vmin, 0, vmax],
         )
         cbar.ax.set_yticklabels(labels=[vmin, 0, vmax], fontsize=DEFAULT_FONTSIZE)
-    ax.set_title(title, fontsize=DEFAULT_FONTSIZE)
+    if title is not None:
+        ax.set_title(title, fontsize=DEFAULT_FONTSIZE)
     ax.set_aspect('equal')
+
+    # disable bounding box
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['left'].set_visible(False)

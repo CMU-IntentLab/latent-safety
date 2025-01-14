@@ -2,7 +2,9 @@
 # making sure we use GPU1
 import os
 import matplotlib.pyplot as plt
-
+from matplotlib.pylab import rcParams
+# set high dpi for publication-ready figures
+rcParams['figure.dpi'] = 300
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import RARL_wm
@@ -88,34 +90,32 @@ def evaluate_value_function(env, ground_truth_brt, q_func):
     return evaluation
 
 def visualize_value_function_evaluation(value_function_evaluation):
-    fig, axes = plt.subplots(1, len(value_function_evaluation["thetas"]), figsize=(12, 6))
 
     # slice_index = 0
     for slice_index in range(len(value_function_evaluation["thetas"])):
-        ax = axes[slice_index]
-        theta_deg = math.degrees(value_function_evaluation["thetas"][slice_index])
+        fig, ax = plt.subplots(figsize=(6, 6))
+        # theta_deg = math.degrees(value_function_evaluation["thetas"][slice_index])
 
         ground_truth_data = value_function_evaluation["v_grid"][:, :, slice_index]
         nn_data = value_function_evaluation["v_nn"][:, :, slice_index]
         vmin = np.min(ground_truth_data)
         vmax = np.max(ground_truth_data)
 
-
         train_wm.tools.plot_heatmap(
             fig = fig,
             ax = ax,
             data = nn_data,
-            title = f"latent BRT\n(theta = {theta_deg:.0f}\u00b0)",
+            theme = "value_function",
             vmin = vmin,
             vmax = vmax,
-            theme = "value_function",
             domain = "binary",
             boundary_data = ground_truth_data,
+            # To simplify composition of figures in external tool:
+            show_tick_labels=False,
+            title=None,
         )
 
-    return fig
-
-
+        IPython.display.display(fig)
 
 def get_grid_value_for_state(env, grid, x, y, theta):
     """
@@ -368,14 +368,8 @@ def evaluate(
         )
         save_obj(value_function_evaluation, value_function_evaluation_path)
     value_function_evaluation = load_obj(value_function_evaluation_path)
-    figure = visualize_value_function_evaluation(value_function_evaluation)
-    # save a high-quality version of the figure for publication:
-    figure.savefig(
-        os.path.join(output_folder, experiment_name + "_value_function_evaluation.jpg"),
-        dpi=300,
-    )
-    if the_ipython_instance is not None and show_plots:
-        IPython.display.display(figure)
+    if show_plots:
+        visualize_value_function_evaluation(value_function_evaluation)
 
     for key in [ "tn", "tp", "fn", "fp", "accuracy", "precision", "recall", "f1"]:
         print(f"{key}: {value_function_evaluation[key]:.3f}")
@@ -402,7 +396,7 @@ def evaluate(
         save_obj(rollout_data, closed_loop_rollout_data_path)
     rollout_data = load_obj(closed_loop_rollout_data_path)
     evaluated_rollouts = evaluate_rollout_data(env, rollout_data, ground_truth_brt)
-    plt = visualize_evaluated_rollout_stats(
+    figure = visualize_evaluated_rollout_stats(
         evaluated_rollouts, title=f"{experiment_name} Closed-Loop Rollout Evaluation"
     )
     if generate_videos:
@@ -410,12 +404,12 @@ def evaluate(
             env, evaluated_rollouts, output_folder, experiment_name
         )
     # save a high-quality version of the figure for publication:
-    plt.write_image(
+    figure.write_image(
         os.path.join(output_folder, experiment_name + "_open_loop_rollout_evaluation.jpg"),
         scale=3  # Higher scale for better quality
     )
     if the_ipython_instance is not None and show_plots:
-        IPython.display.display(plt)
+        IPython.display.display(figure)
 
     # ----------------------- open-loop rollout data collection
     open_loop_rollout_data_path = os.path.join(
@@ -439,7 +433,7 @@ def evaluate(
     evaluated_open_loop_rollouts = evaluate_rollout_data(
         env, open_loop_rollout_data, ground_truth_brt
     )
-    plt = visualize_evaluated_rollout_stats(
+    figure = visualize_evaluated_rollout_stats(
         evaluated_open_loop_rollouts,
         title=f"{experiment_name} Open-Loop Rollout Evaluation",
     )
@@ -452,12 +446,12 @@ def evaluate(
         )
 
     # save a high-quality version of the figure for publication:
-    plt.write_image(
+    figure.write_image(
         os.path.join(output_folder, experiment_name + "_open_loop_rollout_evaluation.jpg"),
         scale=3  # Higher scale for better quality
     )
     if the_ipython_instance is not None and show_plots:
-        IPython.display.display(plt)
+        IPython.display.display(figure)
 
     # --- create publication ready figures
     # TODO: maybe move this code to another function or even separate notebook
@@ -478,23 +472,26 @@ def evaluate(
                 )
                 save_obj(classifier_evaluation, classifier_eval_path)
             classifier_evaluation = load_obj(classifier_eval_path)
-            plot_array, *_ = dreamer.plot_classifier_evaluation(
-                classifier_evaluation["v"],
-                classifier_evaluation["g_x"],
-                classifier_evaluation["labels"],
-            )
-            # save a high-quality version of the figure for publication:
-            img = Image.fromarray(plot_array)
-            img.save(
-                os.path.join(
-                    output_folder,
-                    f"{experiment_name}_classifier_evaluation_theta{int(theta*180/math.pi):02d}deg.jpg",
-                ),
-                dpi=(300, 300),
+            fig, ax = plt.subplots(figsize=(6, 6))
+            x = np.linspace(-1.1, 1.1, 100)
+            y = np.linspace(-1.1, 1.1, 100)
+            X, Y = np.meshgrid(x, y)
+            ground_truth_classifier = (X**2 + Y**2) - 0.5**2
+            train_wm.tools.plot_heatmap(
+                fig = fig,
+                ax = ax,
+                data = classifier_evaluation["v"][:, :, 0],
+                theme = "classifier",
+                vmin = -1,
+                vmax = 1,
+                domain = "binary",
+                boundary_data = ground_truth_classifier,
+                # To simplify composition of figures in external tool:
+                show_tick_labels=False,
+                title=None,
             )
             if the_ipython_instance is not None:
-                IPython.display.display(img)
-            
+                IPython.display.display(fig)
 # %% priviliged agent setup
 config_priv = RARL.get_config(parse_args=False)
 env_priv, environment_info_priv = RARL.construct_environment(config_priv)
@@ -613,10 +610,11 @@ if run_position_ood_setups:
 # run all of the experiment setups in sequence
 for experiment_name, experiment_setup in experiment_setups.items():
     print(f"Running evaluation for {experiment_name}")
-    if experiment_setup['dreamer'] is not None:
-        img = Image.fromarray(experiment_setup["env"].capture_image())
-        if the_ipython_instance is not None:
-            IPython.display.display(img)
+    if experiment_setup['dreamer'] is not None and the_ipython_instance is not None:
+        # capture a few sample images for this environment
+        IPython.display.display(Image.fromarray(experiment_setup["env"].capture_image([-0.25, -0.25, 0.0])))
+        IPython.display.display(Image.fromarray(experiment_setup["env"].capture_image([-0.9, -0.1, 0.0])))
+        IPython.display.display(Image.fromarray(experiment_setup["env"].capture_image([-0.9, -0.1, math.pi / 2])))
     evaluate(
         env=experiment_setup["env"],
         agent=experiment_setup["agent"],

@@ -331,7 +331,32 @@ def visualize_evaluated_rollout_stats(evaluated_rollouts, title):
         },
     )
     fig.update_traces(textinfo="label+value")
-    # set root color to white
+
+    # also print the summary stats as a table to the terminal
+    # one summary for the feasible outcomes with numbers for:
+    # - total number of feasible runs
+    # - number of safe runs among feasible runs
+    # - number of correctly classified runs among feasible ones
+    df_feasible = df[df["is_feasible"]]
+    feasible_summary = {
+        "total_feasible": len(df_feasible),
+        "safe_feasible": len(df_feasible[df_feasible["is_safe"]]),
+        "correctly_classified_feasible": len(
+            df_feasible[df_feasible["is_learning_classification_correct"]]
+        ), 
+    }
+    print("feasible summary", feasible_summary)
+
+    df_infeasible = df[~df["is_feasible"]]
+    infeasible_summary = {
+        "total_infeasible": len(df_infeasible),
+        "safe_infeasible": len(df_infeasible[df_infeasible["is_safe"]]),
+        "correctly_classified_infeasible": len(
+            df_infeasible[df_infeasible["is_learning_classification_correct"]]
+        ),
+    }
+    print("infeasible summary", infeasible_summary)
+
     return fig
 
 

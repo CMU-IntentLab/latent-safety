@@ -17,7 +17,7 @@ sys.path.append(dreamer_dir)
 import dreamer.tools as tools
 
 
-def gen_one_traj_img(x_min, x_max, y_min, y_max, u_max, dt, v, dpi, rand=-1):
+def gen_one_traj_img(x_min, x_max, y_min, y_max, u_max, dt, v, dpi, rand=-1, ablation=None):
   x_max -= 0.1
   y_max -= 0.1
   x_min += 0.1
@@ -40,7 +40,14 @@ def gen_one_traj_img(x_min, x_max, y_min, y_max, u_max, dt, v, dpi, rand=-1):
   state_gt = []
   dones = []
   acs = []
-  mapping = torch.tensor([-u_max, 0, u_max])
+  if ablation is None:
+    mapping = torch.tensor([-u_max, 0, u_max])
+  elif ablation == 'reduced_actions':
+    # ablation: allowing only 2 actions
+    mapping = torch.tensor([0, u_max])
+  else:
+    raise ValueError('ablation not recognized')
+
   center = (0.0, 0.0)
   radius = 0.5
   for t in range(100):
@@ -50,7 +57,7 @@ def gen_one_traj_img(x_min, x_max, y_min, y_max, u_max, dt, v, dpi, rand=-1):
 
 
     if rand == -1:
-      random_integers = torch.randint(0, 3, (1,))
+      random_integers = torch.randint(0, len(mapping), (1,))
     else:
       random_integers = torch.tensor([rand])
     # Map 0 to -1, 1 to 0, and 2 to 1
@@ -98,18 +105,23 @@ def gen_one_traj_img(x_min, x_max, y_min, y_max, u_max, dt, v, dpi, rand=-1):
   
   return state_obs, acs, state_gt, img_obs, dones
 
-def generate_trajs(x_min, x_max, y_min, y_max, u_max, dt, v, num_pts, dpi):
+def generate_trajs(x_min, x_max, y_min, y_max, u_max, dt, v, num_pts, dpi, ablation = None):
   demos = []
   for i in range(num_pts):
     print('demo: ', i)
-    state_obs, acs, state_gt, img_obs, dones = gen_one_traj_img(x_min, x_max, y_min, y_max, u_max, dt, v, dpi)
+    state_obs, acs, state_gt, img_obs, dones = gen_one_traj_img(x_min, x_max, y_min, y_max, u_max, dt, v, dpi, ablation=ablation)
     demo = {}
     demo['obs'] = {'image': img_obs, 'state': state_obs, 'priv_state': state_gt}
     demo['actions'] = acs
     demo['dones'] = dones
     demos.append(demo)
+
+  dataset_name = 'datasets/demos'+str(dpi)
+  if ablation is not None:
+     dataset_name += '_'+ablation
+  dataset_name += '.pkl'
   
-  with open('datasets/demos'+str(dpi)+'.pkl', 'wb') as f:
+  with open(dataset_name, 'wb') as f:
     pickle.dump(demos, f)
 
 def recursive_update(base, update):
@@ -144,9 +156,6 @@ if __name__=='__main__':
         parser.add_argument(f"--{key}", type=arg_type, default=arg_type(value))
     final_config = parser.parse_args(remaining)
 
-
-
-    
     num_pts =  2000 #config['num_pts']
     x_min = final_config.x_min
     x_max = final_config.x_max
@@ -156,4 +165,4 @@ if __name__=='__main__':
     dt = final_config.dt
     v = final_config.speed
     dpi = 128
-    demos = generate_trajs(x_min, x_max, y_min, y_max, u_max, dt, v, num_pts, dpi)
+    demos = generate_trajs(x_min, x_max, y_min, y_max, u_max, dt, v, num_pts, dpi, ablation="reduced_actions")

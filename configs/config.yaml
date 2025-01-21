@@ -19,10 +19,9 @@ defaults:
   precision: 32
   debug: False
   video_pred_log: True
-  # from_ckpt: /home/lassepe/worktree/latent-safety/logs/dreamer_dubins/1113/114111/pretrain_joint.pt
-  # lx_ckpt: /home/lassepe/worktree/latent-safety/logs/dreamer_dubins/1113/114111/classifier.pt
   from_ckpt: /home/lassepe/worktree/latent-safety/logs/dreamer_dubins/1113/114111/best_pretrain_joint_0_12.pt
   lx_ckpt: /home/lassepe/worktree/latent-safety/logs/dreamer_dubins/1113/114111/best_classifier_0_01.pt
+  wm_dataset_path: /home/lassepe/worktree/latent-safety/datasets/demos128.pkl
   num_actions: 3
 
   from_prefill_dir: null
@@ -238,9 +237,6 @@ defaults:
   # Dubins car parameters
   u_max: 1.25
 
-
-
-
   #task_lcrl: dubins_wm-v0 # ra_droneracing_Game-v6, ra_highway_Game-v2, ra_1d_Game-v0
   #reward-threshold: null 
   ##seed: 0 
@@ -292,3 +288,6 @@ offsetr_ood:
   obs_x: 0.0
   obs_y: 0.0
   obs_r: 1.0
+
+reduced_actions_wm_ablation:
+  wm_dataset_path: /home/lassepe/worktree/latent-safety/datasets/demos128_reduced_actions.pkl

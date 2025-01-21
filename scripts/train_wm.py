@@ -714,6 +714,7 @@ if __name__ == "__main__":
     cprint(f"Task: {final_config.task}", "cyan", attrs=["bold"])
     cprint(f"Hybrid Training: {final_config.hybrid_training}", "cyan", attrs=["bold"])
     cprint(f"Logging to: {final_config.logdir}", "cyan", attrs=["bold"])
+    cprint(f"WM Dataset Path: {final_config.wm_dataset_path}", "cyan", attrs=["bold"])
     print("---------------------")
 
     train_eval(final_config)

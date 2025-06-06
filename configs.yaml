@@ -159,5 +159,5 @@ defaults:
   kwargs: {} # type=str, default='{}')
   warm-start-path: null # type=str, default=None) # e.g., log/ra_droneracing_Game-v6/epoch_id_10/policy.pth
 
-  nx: 41
-  ny: 41
+  nx: 31
+  ny: 31

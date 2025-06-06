@@ -1,3 +1,7 @@
+# This file is based on https://github.com/NM512/dreamerv3-torch/tree/main (MIT License)
+# Original author: NM512
+# Modified by: Kensuke Nakamura, 2025
+
 import argparse
 import functools
 import os

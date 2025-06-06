@@ -1,7 +1,6 @@
-# If you find any problem, please contact me at: james.jingqi.li@gmail.com
-# Thanks for your support!
-
-# We apply DDPG to learn the classical reach-avoid value function, using the Bellman backup in arXiv:2112.12288.
+# This file is based on https://github.com/jamesjingqili/lipschitz_continuous_reachability_learning (MIT License)
+# Original author: Jingqi Li
+# Modified by: Ken Nakamura, 2025
 import warnings
 from copy import deepcopy
 from typing import Any, Dict, Optional, Tuple, Union

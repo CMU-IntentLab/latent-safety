@@ -1,3 +1,4 @@
+# Author: Kensuke Nakamura, 2025
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import argparse

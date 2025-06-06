@@ -1,9 +1,10 @@
-# If you find any problem, please contact me at: james.jingqi.li@gmail.com
-# Thanks for your support!
+# This file is based on https://github.com/jamesjingqili/lipschitz_continuous_reachability_learning (MIT License)
+# Original author: Jingqi Li
+# Modified by: Ken Nakamura, 2025
 
-
-# NOTE: This file is modified from tianshou.policy.modelfree.BasePolicy.py by changing the bellman equation at the bottom of the file from the original one to 
-# the one that is used in arXiv:2112.12288. 
+# NOTE: This file is modified from tianshou.policy.modelfree.BasePolicy.py by changing the bellman equation at the bottom
+# We further modify from the LCRL repository by not treating terminal states differently, in effect solving for an infinite-horizon
+# value function.
 
 import gym
 import torch

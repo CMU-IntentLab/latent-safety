@@ -1,6 +1,8 @@
 MIT License
 
-Copyright (c) Jingqi Li, james.jingqi.li@gmail.com
+Copyright (c) 2025 Kensuke Nakamura, kensuken@andrew.cmu.edu
+Based on [Lipschitz-continuous reachability learning](https://github.com/jamesjingqili/lipschitz_continuous_reachability_learning)
+and [Dreamerv3 Torch](https://github.com/NM512/dreamerv3-torch/tree/main) which are both licensed under an MIT license.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

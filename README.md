@@ -34,7 +34,7 @@ World model training from the offline dataset. This differs from the standard tr
 > python scripts/dreamer_offline.py
 
 
-Reachability analysis in the world model via RL:
+Reachability analysis in the world model via RL. We perform resets in latent space by selecting a random timestep from a trajectory in our offline dataset. This ensure that the latent state is within the manifold of the training data.
 
 > python scripts/run_training_ddpg-wm.py
 

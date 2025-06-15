@@ -1,3 +1,6 @@
+# Based on DINO-WM https://arxiv.org/abs/2411.04983
+
+
 
 import torch
 from torch import nn
@@ -48,8 +51,13 @@ def batch_rotvec_to_quat(rotvecs):
     quaternions = r.as_quat()
     return quaternions
 
-def normalize_acs(acs):
-    min_pos = torch.tensor([-0.05211335, -0.05083344, -0.05230197]).to("cuda:1")
+def normalize_acs(acs, device='cuda:0'):
+    max_ac = torch.tensor([0.89928758, 0.71893158, 0.69869383, 0.32456627, 0.51343921, 0.28401476, 1.        ]).to(device)
+    min_ac = torch.tensor([-0.78933347, -1.         ,-0.95038878, -0.3243517,  -0.30636792, -0.30071826 ,-1.        ]).to(device)
+    
+    norm_acs = (acs - min_ac) / (max_ac - min_ac)
+
+    '''min_pos = torch.tensor([-0.05211335, -0.05083344, -0.05230197]).to("cuda:1")
     max_pos = torch.tensor([0.06113502, 0.04549908, 0.03887957]).to("cuda:1")
     pos_range = max_pos - min_pos
     grip_max = 0.0778544
@@ -65,7 +73,7 @@ def normalize_acs(acs):
 
     rot = torch.tensor(batch_quat_to_rotvec(quat.reshape(b*s,d))).to('cuda:1')
     rot = rot.reshape(b, s, -1)
-    norm_acs = torch.cat((pos, rot, gripper), dim=2).to(torch.float32)
+    norm_acs = torch.cat((pos, rot, gripper), dim=2).to(torch.float32)'''
     
     return norm_acs
 
@@ -92,7 +100,6 @@ class Decoder(nn.Module):
             ResidualBlock2(in_channels),            
             ResidualBlock2(in_channels),
             ResidualBlock2(in_channels)
-
 
         )
         
@@ -284,20 +291,12 @@ class VideoTransformer(nn.Module):
         )
                 
         
-        #nn.Sequential(
-        #    LayerNorm(total_dim),
-        #    nn.Linear(total_dim, dim)  # Predicts both video streams
-        #)
         self.front_head = nn.Sequential(
             LayerNorm(total_dim),
             nn.Linear(total_dim, total_dim),
             nn.ReLU(),
             nn.Linear(total_dim, dim)
         )
-        #nn.Sequential(
-        #    LayerNorm(total_dim),
-        #    nn.Linear(total_dim, dim)  # Predicts both video streams
-        #)
         
         self.state_head = nn.Sequential(
             LayerNorm(total_dim),
@@ -312,10 +311,7 @@ class VideoTransformer(nn.Module):
             nn.ReLU(),
             nn.Linear(total_dim, 1)
         )
-        #nn.Sequential(
-        #    LayerNorm(total_dim),
-        #    nn.Linear(total_dim, state_dim)
-        #)
+
         
 
     
@@ -334,7 +330,6 @@ class VideoTransformer(nn.Module):
         pred2 = self.wrist_head(x)
         state_preds = self.state_pred(x)
         failure_preds = self.failure_pred(x)
-
         
         return pred1, pred2, state_preds, failure_preds
 
@@ -352,11 +347,10 @@ class VideoTransformer(nn.Module):
         batch_size, num_frames, _, _ = video1.shape
     
         x = torch.cat((video1, video2, action_embeddings, state_embeddings), dim=3)
-        
         # Add positional embeddings
         x = x + self.pos_embedding
-        x = x + self.temp_embedding.unsqueeze(2)
-        
+        x = x + self.temp_embedding[:, :num_frames].unsqueeze(2)
+
         # Reshape for transformer
         x = rearrange(x, 'b s n d -> b (s n) d')
         x = self.dropout(x)
@@ -388,3 +382,118 @@ class VideoTransformer(nn.Module):
         features = self.dino.forward_features(video)['x_norm_patchtokens']
         return features.view(b, f, -1, features.shape[-1])
     
+
+import torch
+import einops
+import torch.nn as nn
+import torch.nn.functional as F
+
+def initialize_weights(m):
+    if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
+        nn.init.kaiming_uniform_(m.weight.data, nonlinearity="relu")
+        nn.init.constant_(m.bias.data, 0)
+    elif isinstance(m, nn.Linear):
+        nn.init.kaiming_uniform_(m.weight.data)
+        nn.init.constant_(m.bias.data, 0)
+
+def horizontal_forward(network, x, input_shape=(-1,), output_shape=(-1,)):
+    batch_with_horizon_shape = x.shape[: -len(input_shape)]
+    if not batch_with_horizon_shape:
+        batch_with_horizon_shape = (1,)
+    x = x.reshape(-1, *input_shape)
+    x = network(x)
+    x = x.reshape(*batch_with_horizon_shape, *output_shape)
+    return x
+
+def create_normal_dist(
+    x,
+    std=None,
+    mean_scale=1,
+    init_std=0,
+    min_std=0.1,
+    activation=None,
+    event_shape=None,
+):
+    if std == None:
+        mean, std = torch.chunk(x, 2, -1)
+        mean = mean / mean_scale
+        if activation:
+            mean = activation(mean)
+        mean = mean_scale * mean
+        std = F.softplus(std + init_std) + min_std
+    else:
+        mean = x
+    dist = torch.distributions.Normal(mean, std)
+    if event_shape:
+        dist = torch.distributions.Independent(dist, event_shape)
+    return dist
+    
+
+class TransposedConvDecoder(nn.Module):
+    def __init__(self, observation_shape=(3, 224, 224), emb_dim=512, activation=nn.ReLU, depth=64, kernel_size=5, stride=3):
+        super().__init__()
+
+        activation = activation()
+        self.observation_shape = observation_shape
+        self.depth = depth
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.emb_dim = emb_dim
+
+        self.network = nn.Sequential(
+            nn.Linear(
+                emb_dim, self.depth * 32
+            ),
+            nn.Unflatten(1, (self.depth * 32, 1)),
+            nn.Unflatten(2, (1,1)),
+            nn.ConvTranspose2d(
+                self.depth * 32,
+                self.depth * 8,
+                self.kernel_size,
+                self.stride,
+                padding=1
+            ),
+            activation,
+            nn.ConvTranspose2d(
+                self.depth * 8,
+                self.depth * 4,
+                self.kernel_size,
+                self.stride,
+                padding=1
+            ),
+            activation,
+            nn.ConvTranspose2d(
+                self.depth * 4,
+                self.depth * 2,
+                self.kernel_size,
+                self.stride,
+                padding=1
+            ),
+            activation,
+            nn.ConvTranspose2d(
+                self.depth * 2,
+                self.depth * 1,
+                self.kernel_size,
+                self.stride,
+                padding=1
+            ),
+            activation,
+            nn.ConvTranspose2d(
+                self.depth * 1,
+                self.observation_shape[0],
+                self.kernel_size,
+                self.stride,
+                padding=1
+            ),
+            nn.Upsample(size=(observation_shape[1], observation_shape[2]), mode='bilinear', align_corners=False)
+        )
+        self.network.apply(initialize_weights)
+
+    def forward(self, posterior):
+        x = horizontal_forward(
+            self.network, posterior, input_shape=[self.emb_dim],output_shape=self.observation_shape
+        )
+        dist = create_normal_dist(x, std=1, event_shape=len(self.observation_shape))
+        img = dist.mean.squeeze(2)
+        img = einops.rearrange(img, "b t c h w -> (b t) c h w")
+        return img, torch.zeros(1).to(posterior.device) # dummy placeholder

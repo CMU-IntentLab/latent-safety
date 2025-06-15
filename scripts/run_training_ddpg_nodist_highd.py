@@ -152,19 +152,20 @@ wm = VideoTransformer(
         dropout=0.1
     )
 
-#wm.load_state_dict(torch.load('checkpoints/claude_zero_wfail4900.pth'))
-wm.load_state_dict(torch.load('checkpoints/claude_zero_wfail20500_rotvec.pth'))
+#wm.load_state_dict(torch.load('checkpoints/claude_zero_wfail20500_rotvec.pth'))
+wm.load_state_dict(torch.load('checkpoints/best_classifier.pth'))
 
-hdf5_file = '/data/ken/ken_data/skittles_trajectories_unsafe_labeled.h5'
+#hdf5_file = '/data/ken/ken_data/skittles_trajectories_unsafe_labeled.h5'
+hdf5_file = '/data/ken/latent-unsafe/consolidated.h5'
 bs = 1
 bl=20
-device = 'cuda:1'
+device = 'cuda:0'
 H = 3
-expert_data = SplitTrajectoryDataset(hdf5_file, 3, split='train', num_test=100)
+expert_data = SplitTrajectoryDataset(hdf5_file, 3, split='train', num_test=0)
 
 expert_loader = iter(DataLoader(expert_data, batch_size=1, shuffle=True))
 
-env = gymnasium.make(args.task_lcrl, params = [wm, expert_data])
+env = gymnasium.make(args.task_lcrl, params = [wm, expert_data], device=device)
 
 
 # check if the environment has control and disturbance actions:
@@ -243,6 +244,7 @@ print("DDPG under the Avoid annealed Bellman equation with no Disturbance has be
 #else:
 #    from LCRL.policy import reach_avoid_game_DDPGPolicy as DDPGPolicy
 #    print("DDPG under the Reach-RL Bellman equation has been loaded!")
+
 actor1_net = Net(args.state_shape, hidden_sizes=args.control_net, activation=actor_activation, device=args.device)
 actor1 = Actor(
     actor1_net, args.action1_shape, max_action=args.max_action1, device=args.device

@@ -107,7 +107,7 @@ import collections
 # NOTE: all the reach-avoid gym environments are in reach_rl_gym, the constraint information is output as an element of the info dictionary in gym.step() function
 from test_loader import SplitTrajectoryDataset
 from torch.utils.data import DataLoader
-
+from dino_decoders_official import VQVAE
 """
     Note that, we can pass arguments to the script by using
     python run_training_ddpg.py --task ra_droneracing_Game-v6 --control-net 512 512 512 512 --disturbance-net 512 512 512 512 --critic-net 512 512 512 512 --epoch 10 --total-episodes 160 --gamma 0.9
@@ -218,20 +218,19 @@ wm = VideoTransformer(
     )
 
 #wm.load_state_dict(torch.load('checkpoints/claude_zero_wfail4900.pth'))
-wm.load_state_dict(torch.load('checkpoints/claude_zero_wfail20500_rotvec.pth'))
+#wm.load_state_dict(torch.load('checkpoints/claude_zero_wfail20500_rotvec.pth'))
+wm.load_state_dict(torch.load('checkpoints/best_classifier.pth'))
 
-
-hdf5_file = '/data/ken/ken_data/skittles_trajectories_labeled.h5'
+hdf5_file = '/data/ken/latent-unsafe/consolidated.h5'
 bs = 1
 bl= 10
-device = 'cuda:1'
+device = 'cuda:0'
 H = 3
 expert_data = SplitTrajectoryDataset(hdf5_file, 3, split='train', num_test=100)
 
 expert_loader = iter(DataLoader(expert_data, batch_size=1, shuffle=True))
 
-env = gymnasium.make(args.task_lcrl, params = [wm, expert_loader])
-
+env = gymnasium.make(args.task_lcrl, params = [wm, expert_data], device=device)
 
 # check if the environment has control and disturbance actions:
 assert hasattr(env, 'action1_space') #and hasattr(env, 'action2_space'), "The environment does not have control and disturbance actions!"
@@ -245,7 +244,6 @@ args.action1_shape = env.action1_space.shape or env.action1_space.n
 #args.action2_shape = env.action2_space.shape or env.action2_space.n
 args.max_action1 = env.action1_space.high[0]
 #args.max_action2 = env.action2_space.high[0]
-
 
 
 from LCRL.data import Batch
@@ -297,22 +295,13 @@ critic_optim = torch.optim.Adam(critic.parameters(), lr=args.critic_lr)
 # import pdb; pdb.set_trace()
 log_path = None
 
-#elif args.is_game_baseline:
-#    from LCRL.policy import reach_avoid_game_DDPGPolicy_annealing as DDPGPolicy
-#    print("DDPG under the Reach-Avoid annealed Bellman equation has been loaded!")
-#else:
-#    from LCRL.policy import reach_avoid_game_DDPGPolicy as DDPGPolicy
-#    print("DDPG under the Reach-RL Bellman equation has been loaded!")
+
 actor1_net = Net(args.state_shape, hidden_sizes=args.control_net, activation=actor_activation, device=args.device)
 actor1 = Actor(
     actor1_net, args.action1_shape, max_action=args.max_action1, device=args.device
 ).to(args.device)
 actor1_optim = torch.optim.Adam(actor1.parameters(), lr=args.actor_lr)
-#actor2_net = Net(args.state_shape, hidden_sizes=args.disturbance_net, activation=actor_activation, device=args.device)
-#actor2 = Actor(
-#    actor2_net, args.action2_shape, max_action=args.max_action2, device=args.device
-#).to(args.device)
-#actor2_optim = torch.optim.Adam(actor2.parameters(), lr=args.actor_lr)
+
 
 
 
@@ -332,8 +321,9 @@ actor_gradient_steps=args.actor_gradient_steps,
 )
 
 #policy.load_state_dict(torch.load('/home/kensuke/latent-safety/scripts/logs/dreamer_dubins/lcrl/1227/151847/lcrl/franka_wm_DINO-v0/wm_actor_activation_ReLU_critic_activation_ReLU_game_gd_steps_1_tau_0.005_training_num_1_buffer_size_40000_c_net_512_4_a1_512_4_a2_512_4_gamma_0.95/noise_0.1_actor_lr_0.0001_critic_lr_0.001_batch_512_step_per_epoch_40000_kwargs_{}_seed_0/epoch_id_100/policy.pth'))
-policy.load_state_dict(torch.load('/home/kensuke/latent-safety/scripts/logs/dreamer_dubins/lcrl/0109/140328/lcrl/franka_wm_DINO-v0/wm_actor_activation_ReLU_critic_activation_ReLU_game_gd_steps_1_tau_0.005_training_num_1_buffer_size_40000_c_net_512_4_a1_512_4_a2_512_4_gamma_0.95/noise_0.1_actor_lr_0.0001_critic_lr_0.001_batch_512_step_per_epoch_40000_kwargs_{}_seed_0/epoch_id_100/rotvec_policy.pth'))
-
+#policy.load_state_dict(torch.load('/home/kensuke/latent-safety/scripts/logs/dreamer_dubins/lcrl/0112/152128/lcrl/franka_wm_DINO-v0/wm_actor_activation_ReLU_critic_activation_ReLU_game_gd_steps_1_tau_0.005_training_num_1_buffer_size_40000_c_net_512_4_a1_512_4_a2_512_4_gamma_0.95/noise_0.1_actor_lr_0.0001_critic_lr_0.001_batch_512_step_per_epoch_40000_kwargs_{}_seed_0/epoch_id_100/rotvec_policy.pth'))
+policy.load_state_dict(torch.load('/home/kensuke/latent-safety/scripts/logs/dreamer_dubins/lcrl/0615/000549/lcrl/franka_wm_DINO-v0/wm_actor_activation_ReLU_critic_activation_ReLU_game_gd_steps_1_tau_0.005_training_num_1_buffer_size_40000_c_net_512_4_a1_512_4_a2_512_4_gamma_0.95/noise_0.1_actor_lr_0.0001_critic_lr_0.001_batch_512_step_per_epoch_40000_kwargs_{}_seed_0/epoch_id_130/rotvec_policy.pth'))
+print('state dict loaded')
 def find_a(state):
     tmp_obs = np.array(state).reshape(1,-1)
     tmp_batch = Batch(obs = tmp_obs, info = Batch())
@@ -354,7 +344,7 @@ def fill_eps_from_pkl_files(cache, cache_eval):
     pkl_files = [os.path.join(demo_path, f) for f in os.listdir(demo_path) if f.endswith('.pkl')]
     
     pixel_keys = ["cam_rs", "cam_zed_crop"] # zed_right gets priority over zed_left
-    embd_keys = ["cam_rs_embd", "cam_zed_right_embd"]
+    embd_keys = ["cam_rs_embd", "cam_zed_embd"]
     for i, pkl_file in tqdm(
         enumerate(pkl_files),
         desc="Loading in expert data",
@@ -390,7 +380,7 @@ def fill_eps_from_pkl_files(cache, cache_eval):
                     embd = obs[obs_key]
                     if obs_key == "cam_rs_embd":
                         emb_key = "robot0_eye_in_hand_embd"
-                    elif obs_key == "cam_zed_left_embd" or obs_key == "cam_zed_right_embd":
+                    elif obs_key == "cam_zed_embd":
                         emb_key = "agentview_embd"
                     transition[emb_key] = embd
             
@@ -422,35 +412,26 @@ def make_dataset(episodes, bs, bl):
 if __name__ == "__main__":
     #wandb.init(project="dino")
 
-    hdf5_file = '/data/ken/ken_data/skittles_trajectories_unsafe_labeled.h5'
+    #hdf5_file = '/data/ken/ken_data/skittles_trajectories_unsafe_labeled.h5'
     bs = 1
     bl=12
-    device = 'cuda:1'
     H = 3
-    expert_data_imagine = SplitTrajectoryDataset(hdf5_file, bl, split='test', num_test=28)
+    expert_data_imagine = SplitTrajectoryDataset(hdf5_file, bl, split='train', num_test=0)
 
     expert_loader_imagine = iter(DataLoader(expert_data_imagine, batch_size=1, shuffle=True))
 
-    threshold = 0.63
+    threshold = 0.7
 
-    decoder = Decoder().to(device)
-    decoder.load_state_dict(torch.load('checkpoints/best_decoder_10m.pth'))
+    decoder = VQVAE().to(device)
+    #decoder.load_state_dict(torch.load('checkpoints/best_decoder_10m.pth'))
+    decoder.load_state_dict(torch.load('checkpoints/testing_decoder.pth'))
     decoder.eval()
 
-    transition = VideoTransformer(
-        image_size=(224, 224),
-        dim=384,  # DINO feature dimension
-        ac_dim=10,  # Action embedding dimension
-        state_dim=8,  # State dimension
-        depth=6,
-        heads=16,
-        mlp_dim=2048,
-        num_frames=3,
-        dropout=0.1
-    ).to(device)
+    transition = wm
 
     #transition.load_state_dict(torch.load('checkpoints/claude_zero_wfail4900.pth'))
-    transition.load_state_dict(torch.load('checkpoints/claude_zero_wfail20500_rotvec.pth'))
+    #transition.load_state_dict(torch.load('checkpoints/claude_zero_wfail20500_rotvec.pth'))
+    transition.load_state_dict(torch.load('checkpoints/best_classifier.pth'))
     
     transition.eval()
 
@@ -458,23 +439,21 @@ if __name__ == "__main__":
     tp_cl, tn_cl, fp_cl, fn_cl = 0, 0, 0, 0
     #data = next(expert_dataset)
 
+    num = 0
     while True:
-        print('loop')
         data = next(expert_loader_imagine)
-        print(data["failure"][[0], 2:])
 
-        print((data["failure"][[0]]==0).all())
-
-        while (data["failure"][[0]]==0).all() or (data["failure"][[0]]>0).all():
+        
+        while (data["failure"][[0], :9]==0).all() or (data["failure"][[0], 6:]>0).all() :
             data = next(expert_loader_imagine)
 
         inputs2 = data['cam_rs_embd'][[0], :H].to(device)
-        inputs1 = data['cam_zed_right_embd'][[0], :H].to(device)
+        inputs1 = data['cam_zed_embd'][[0], :H].to(device)
         all_acs = data['action'][[0]].to(device)
-        all_acs = normalize_acs(all_acs)
+        all_acs = normalize_acs(all_acs, device=device)
         all_fails = data['failure'][[0]].to(device)
         acs = data['action'][[0],:H].to(device)
-        acs = normalize_acs(acs)
+        acs = normalize_acs(acs, device=device)
         states = data['state'][[0],:H].to(device)
         im1s = (data['agentview_image'][[0], :H].squeeze().to(device)/255.).detach().cpu().numpy()
         im2s = (data['robot0_eye_in_hand_image'][[0], :H].squeeze().to(device)/255.).detach().cpu().numpy()
@@ -488,8 +467,18 @@ if __name__ == "__main__":
             
             latent = torch.mean(latent[:, [-1]], axis=2).detach().cpu().numpy()
             pred_brt = evaluate_V(latent)
-            pred_im1 = decoder(pred1[:,-1])[0].unsqueeze(0).detach().cpu().numpy()
-            pred_im2 = decoder(pred2[:,-1])[0].unsqueeze(0).detach().cpu().numpy()
+
+            pred_latent = torch.cat([pred1[:,[-1]], pred2[:,[-1]]], dim=0)#.squeeze()
+            pred_ims, _ = decoder(pred_latent)
+
+            pred_ims = rearrange(pred_ims, "(b t) c h w -> b t h w c", t=1)
+            pred_im1, pred_im2 = torch.split(pred_ims, [inputs1.shape[0], inputs2.shape[0]], dim=0)
+            pred_im1 = pred_im1.squeeze(0).detach().cpu().numpy()
+            pred_im2 = pred_im2.squeeze(0).detach().cpu().numpy()
+
+
+            #pred_im1 = decoder(pred1[:,-1])[0].unsqueeze(0).detach().cpu().numpy()
+            #pred_im2 = decoder(pred2[:,-1])[0].unsqueeze(0).detach().cpu().numpy()
             im1s = np.concatenate([im1s, pred_im1], axis=0)
             im2s = np.concatenate([im2s, pred_im2], axis=0)
 
@@ -510,18 +499,18 @@ if __name__ == "__main__":
         gt_im2 = (data['robot0_eye_in_hand_image'][[0], :bl].squeeze().to(device)/255.).detach().cpu().numpy()
 
 
-        gt_imgs = np.concatenate([gt_im1, gt_im2], axis=-1)
-        pred_imgs = np.concatenate([im1s, im2s], axis=-1)
-        pred_imgs2 = np.concatenate([im1s, im2s], axis=-1)
+        gt_imgs = np.concatenate([gt_im1, gt_im2], axis=-3)
+        pred_imgs = np.concatenate([im1s, im2s], axis=-3)
+        pred_imgs2 = np.concatenate([im1s, im2s], axis=-3)
 
 
         for i in range(len(pred_failures)):
             if pred_brts[i] < threshold:
-                pred_imgs2[H+i, 1] *= 1.2
+                pred_imgs2[H+i, :,:,1] *= 1.2
             if pred_failures[i] == 1:
-                pred_imgs[H+i, 0] *= 1.2
+                pred_imgs[H+i, :,:,0] *= 1.2
             if all_fails[0,H+i] == 1 or all_fails[0,H+i] == 2:
-                gt_imgs[H+i, 0] *= 1.2
+                gt_imgs[H+i, :,:,0] *= 1.2
 
             if pred_failures[i] == 0 and all_fails[0,H+i] == 0:
                 tn_ol+= 1
@@ -538,23 +527,22 @@ if __name__ == "__main__":
         vid = np.concatenate([gt_imgs, pred_imgs2, pred_imgs], axis=-2)
 
         vid = (vid * 255).clip(0, 255).astype(np.uint8)
-        frames = np.transpose(vid, (0, 2, 3, 1))
+        print('vid shape', vid.shape)
         fps = 20  # Frames per second
-        #iio.imwrite('output_video_dino_ol.gif', frames, duration=1/fps, loop=0)
+        iio.imwrite(f'output_video_dino_ol_{num}.gif', vid, duration=1/fps, loop=0)
 
         # Release the video writer
-        print('saved!')
         inputs2 = data['cam_rs_embd'][[0], :H].to(device)
-        inputs1 = data['cam_zed_right_embd'][[0], :H].to(device)
+        inputs1 = data['cam_zed_embd'][[0], :H].to(device)
         all_acs = data['action'][[0]].to(device)
-        all_acs = normalize_acs(all_acs)
+        all_acs = normalize_acs(all_acs, device=device)
         all_states = data['state'][[0]].to(device)
         all_in2s = data['cam_rs_embd'][[0]].squeeze().to(device)
-        all_in1s = data['cam_zed_right_embd'][[0]].squeeze().to(device)
+        all_in1s = data['cam_zed_embd'][[0]].squeeze().to(device)
 
 
         acs = data['action'][[0],:H].to(device)
-        acs = normalize_acs(acs)
+        acs = normalize_acs(acs, device=device)
         states = data['state'][[0],:H].to(device)
         im1s = (data['agentview_image'][[0], :H].squeeze().to(device)/255.).detach().cpu().numpy()
         im2s = (data['robot0_eye_in_hand_image'][[0], :H].squeeze().to(device)/255.).detach().cpu().numpy()
@@ -566,9 +554,18 @@ if __name__ == "__main__":
             pred1, pred2, pred_state, pred_fail = transition.front_head(latent), transition.wrist_head(latent), transition.state_pred(latent), transition.failure_pred(latent)
             
             latent = torch.mean(latent[:, [-1]], axis=2).detach().cpu().numpy()
-            pred_brt = evaluate_V(latent)            
-            pred_im1 = decoder(pred1[:,-1])[0].unsqueeze(0).detach().cpu().numpy()
-            pred_im2 = decoder(pred2[:,-1])[0].unsqueeze(0).detach().cpu().numpy()
+            pred_brt = evaluate_V(latent)
+            act = find_a(latent)
+            
+            pred_latent = torch.cat([pred1[:,[-1]], pred2[:,[-1]]], dim=0)#.squeeze()
+            pred_ims, _ = decoder(pred_latent)
+
+            pred_ims = rearrange(pred_ims, "(b t) c h w -> b t h w c", t=1)
+            pred_im1, pred_im2 = torch.split(pred_ims, [inputs1.shape[0], inputs2.shape[0]], dim=0)
+            pred_im1 = pred_im1.squeeze(0).detach().cpu().numpy()
+            pred_im2 = pred_im2.squeeze(0).detach().cpu().numpy()
+            #pred_im1 = decoder(pred1[:,-1])[0].unsqueeze(0).detach().cpu().numpy()
+            #pred_im2 = decoder(pred2[:,-1])[0].unsqueeze(0).detach().cpu().numpy()
             im1s = np.concatenate([im1s, pred_im1], axis=0)
             im2s = np.concatenate([im2s, pred_im2], axis=0)
             pred_failures.append(pred_fail[:,-1].item())
@@ -579,23 +576,22 @@ if __name__ == "__main__":
             inputs2 = torch.cat([inputs2[[0], 1:], all_in2s[H+i].unsqueeze(0).unsqueeze(0)], dim=1)
             states = torch.cat([states[[0], 1:], all_states[0, H+i].unsqueeze(0).unsqueeze(0)], dim=1)
 
-            
 
         gt_im1 = (data['agentview_image'][[0], :bl].squeeze().to(device)/255.).detach().cpu().numpy()
         gt_im2 = (data['robot0_eye_in_hand_image'][[0], :bl].squeeze().to(device)/255.).detach().cpu().numpy()
             
         pred_failures_int = (torch.tensor(pred_failures) < 0.5).to(torch.int32)
               
-        gt_imgs = np.concatenate([gt_im1, gt_im2], axis=-1)
-        pred_imgs = np.concatenate([im1s, im2s], axis=-1)
-        pred_imgs2 = np.concatenate([im1s, im2s], axis=-1)
+        gt_imgs = np.concatenate([gt_im1, gt_im2], axis=-3)
+        pred_imgs = np.concatenate([im1s, im2s], axis=-3)
+        pred_imgs2 = np.concatenate([im1s, im2s], axis=-3)
         for i in range(len(pred_failures)):
             if pred_brts[i] < threshold:
-                pred_imgs2[H+i, 1] *= 1.2
+                pred_imgs2[H+i, :, :,1] *= 1.2
             if pred_failures_int[i] == 1:
-                pred_imgs[H+i, 0] *= 1.2
+                pred_imgs[H+i, :,:,0] *= 1.2
             if all_fails[0,H+i] == 1 or all_fails[0,H+i] == 2:
-                gt_imgs[H+i, 0] *= 1.2
+                gt_imgs[H+i, :,:,0] *= 1.2
 
             if pred_failures_int[i] == 0 and all_fails[0,H+i] == 0:
                 tn_cl += 1
@@ -606,7 +602,7 @@ if __name__ == "__main__":
             if pred_failures_int[i] == 1 and all_fails[0,H+i] != 0:
                 tp_cl += 1   
         
-
+        print('pred brts', pred_brts)
         print('doomed f', (torch.tensor(pred_brts)<threshold).to(torch.int32))
         print('failures', pred_failures_int)
 
@@ -614,13 +610,12 @@ if __name__ == "__main__":
         vid = np.concatenate([gt_imgs, pred_imgs2, pred_imgs], axis=-2)
 
         vid = (vid * 255).clip(0, 255).astype(np.uint8)
-        frames = np.transpose(vid, (0, 2, 3, 1))
         fps = 20  # Frames per second
-        print(im1s.shape)
-        #iio.imwrite('output_video_dino_cl.gif', frames, duration=1/fps, loop=0)
+        iio.imwrite(f'output_video_dino_cl_{num}.gif', vid, duration=1/fps, loop=0)
         print('end loop')
-
-    
+        num += 1
+        if num > 10:
+            exit()
     
 
 

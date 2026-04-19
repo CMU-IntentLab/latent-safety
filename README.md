@@ -1,3 +1,4 @@
+# Update 2: We moved forward! Check out [our latent CBF repository](https://github.com/CMU-IntentLab/latent_cbf) which subsumes this one and includes updated code.
 # Update: We now provide training code for DINO-WM and the DINO-WM latent safety filter in the `dino` branch
 
 # Latent-space Reachability in Pytorch
